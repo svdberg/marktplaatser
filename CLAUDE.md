@@ -41,6 +41,7 @@ pip install -r marktplaats-backend/requirements.txt
 
 **Deploy to AWS:**
 ```bash
+export MARKTPLAATS_TOKEN=your_api_token
 cd marktplaats-backend
 ./deploy.sh
 ```
@@ -69,3 +70,7 @@ The following utility modules are imported but not present in the codebase:
 Update the S3 bucket name in both:
 - `generate_listing_lambda.py:9` (`s3_bucket` variable)
 - `serverless.yaml:10` (`S3_BUCKET` environment variable)
+
+Set your Marktplaats API token via the `MARKTPLAATS_TOKEN` environment
+variable so that `category_matcher.py` can authenticate to the API.
+

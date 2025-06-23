@@ -1,9 +1,10 @@
+import os
 import requests
 from difflib import get_close_matches
 
 MARKTPLAATS_API_BASE = "https://api.marktplaats.nl/v1"
 MARKTPLAATS_AUTH_HEADER = {
-    "Authorization": "Bearer YOUR_ACCESS_TOKEN",  # Replace with actual token securely
+    "Authorization": f"Bearer {os.environ['MARKTPLAATS_TOKEN']}",
     "Accept-Language": "nl-NL"  # 👈 Ensures Dutch category names
 }
 
