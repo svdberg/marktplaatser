@@ -1,0 +1,46 @@
+service: marktplaats-backend
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: eu-west-1
+  memorySize: 512
+  timeout: 30
+  environment:
+    S3_BUCKET: marktplaatser-images
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - rekognition:DetectLabels
+            - rekognition:DetectText
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:ListBucket
+          Resource:
+            - arn:aws:s3:::marktplaatser-images
+            - arn:aws:s3:::marktplaatser-images/*
+        - Effect: Allow
+          Action:
+            - bedrock:InvokeModel
+          Resource: arn:aws:bedrock:eu-west-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0
+
+functions:
+  generateListing:
+    handler: generate_listing_lambda.lambda_handler
+    events:
+      - http:
+          path: generate-listing
+          method: post
+          cors: true
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
