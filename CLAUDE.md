@@ -9,7 +9,7 @@ This is a serverless AWS Lambda application for generating marketplace listings 
 **Core Components:**
 - `generate_listing_lambda.py` - Main Lambda handler that orchestrates the image processing pipeline
 - `rekognition_utils.py` - AWS Rekognition integration for image analysis (label detection and text extraction)
-- Missing utility modules referenced in imports: `bedrock_utils.py`, `s3_utils.py`, `handler.py`
+- The serverless configuration references a `handler.py` module that is not present.
 
 **Data Flow:**
 1. Lambda receives base64-encoded image via HTTP POST
@@ -20,7 +20,7 @@ This is a serverless AWS Lambda application for generating marketplace listings 
 
 ## Deployment & Infrastructure
 
-The application uses Serverless Framework for deployment configuration (`serverless_backend.yaml`):
+The application uses Serverless Framework for deployment configuration (`serverless.yaml`):
 - Runtime: Python 3.11
 - Region: eu-west-1
 - Memory: 512MB
@@ -43,7 +43,15 @@ pip install -r marktplaats-backend/requirements.txt
 ```bash
 export MARKTPLAATS_TOKEN=your_api_token
 cd marktplaats-backend
-serverless deploy
+./deploy.sh
+```
+This script creates the S3 bucket if needed, deploys the stack and writes the
+API endpoint to `endpoint.txt`.
+
+**Test the deployed function:**
+```bash
+cd marktplaats-backend
+./test.sh
 ```
 
 **Local testing:**
@@ -55,15 +63,14 @@ serverless invoke local -f generateListing
 ## Missing Implementation Files
 
 The following utility modules are imported but not present in the codebase:
-- `bedrock_utils.py` - Should contain `generate_listing_with_bedrock()` function
-- `s3_utils.py` - Should contain `upload_image_to_s3()` function
 - `handler.py` - Expected by serverless.yaml but main handler is in `generate_listing_lambda.py`
 
 ## Configuration
 
 Update the S3 bucket name in both:
 - `generate_listing_lambda.py:9` (`s3_bucket` variable)
-- `serverless_backend.yaml:10` (`S3_BUCKET` environment variable)
+- `serverless.yaml:10` (`S3_BUCKET` environment variable)
 
 Set your Marktplaats API token via the `MARKTPLAATS_TOKEN` environment
 variable so that `category_matcher.py` can authenticate to the API.
+
