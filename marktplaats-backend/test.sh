@@ -1,39 +1,23 @@
 #!/bin/bash
 
-# Configuration
-IMAGE="sample.jpg"
-ENCODED="image.txt"
-PAYLOAD="payload.json"
-# Get endpoint from deploy script output
-if [ -f "endpoint.txt" ]; then
-  ENDPOINT=$(cat endpoint.txt)
-else
-  echo "❌ Error: endpoint.txt not found. Run deploy.sh first."
+set -e
+
+if [ -z "$API_URL" ]; then
+  echo "Please set the API_URL environment variable."
   exit 1
 fi
 
-# Check if image file exists
-if [ ! -f "$IMAGE" ]; then
-  echo "❌ Error: Image file '$IMAGE' not found."
+IMAGE_FILE=${1:-sample.jpg}
+
+if [ ! -f "$IMAGE_FILE" ]; then
+  echo "Image file '$IMAGE_FILE' not found."
   exit 1
 fi
 
-# Encode image to base64 using macOS-compatible syntax
-echo "📦 Encoding image..."
-base64 -i "$IMAGE" -o "$ENCODED"
+BASE64_IMAGE=$(base64 -i "$IMAGE_FILE" | tr -d '\n')
 
-# Create JSON payload
-echo "📝 Creating payload..."
-cat <<EOF > "$PAYLOAD"
-{
-  "image_base64": "$(cat $ENCODED)"
-}
-EOF
+echo "Sending request to Lambda..."
 
-# Send the request
-echo "🚀 Sending request to Lambda..."
-curl -X POST "$ENDPOINT" \
+curl -s -X POST "$API_URL" \
   -H "Content-Type: application/json" \
-  -d @"$PAYLOAD"
-
-echo -e "\n✅ Done."
+  -d "{\"image\": \"${BASE64_IMAGE}\"}" | jq

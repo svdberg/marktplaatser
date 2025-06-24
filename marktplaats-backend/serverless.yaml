@@ -8,7 +8,8 @@ provider:
   timeout: 30
   environment:
     S3_BUCKET: marktplaatser-images
-    MARKTPLAATS_TOKEN: ${env:MARKTPLAATS_TOKEN}
+    MARKTPLAATS_CLIENT_ID: ${env:MARKTPLAATS_CLIENT_ID}
+    MARKTPLAATS_CLIENT_SECRET: ${env:MARKTPLAATS_CLIENT_SECRET}
   iam:
     role:
       statements:

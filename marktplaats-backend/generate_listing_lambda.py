@@ -1,39 +1,48 @@
-import boto3
 import json
-import uuid
+import os
 import base64
-from rekognition_utils import analyze_image_with_rekognition
+import boto3
 from bedrock_utils import generate_listing_with_bedrock
-from s3_utils import upload_image_to_s3
+from rekognition_utils import extract_labels_and_text
+from category_matcher import match_category_name, fetch_marktplaats_categories, flatten_categories
 
-s3_bucket = "marktplaatser-images"
-rekognition_client = boto3.client("rekognition")
-
+s3 = boto3.client("s3")
 
 def lambda_handler(event, context):
     try:
         body = json.loads(event["body"])
-        image_data = base64.b64decode(body["image_base64"])
+        image_data = base64.b64decode(body["image"])
 
-        # Upload to S3 (optional, for later use or debugging)
-        image_key = f"uploads/{str(uuid.uuid4())}.jpg"
-        upload_image_to_s3(image_data, s3_bucket, image_key)
+        # Extract labels and text using Rekognition
+        labels, text = extract_labels_and_text(image_data)
 
-        # Run Rekognition using inline bytes
-        labels, text = analyze_image_with_rekognition(rekognition_client, image_bytes=image_data)
-
-        # Compose prompt for LLM
+        # Generate listing with Claude
         listing_data = generate_listing_with_bedrock(labels, text)
+
+        cats = fetch_marktplaats_categories()
+        flat = flatten_categories(cats)
+    
+
+        # Match category
+        category_match = match_category_name(listing_data.get("category", ""), flat)
+        if not category_match:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "Could not match category"})
+            }
+
+        # Build listing result
+        listing = {
+            "title": listing_data["title"],
+            "description": listing_data["description"],
+            "categoryId": category_match["categoryId"],
+            "categoryName": category_match["match"],
+            "attributes": listing_data["attributes"]
+        }
 
         return {
             "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({
-                "title": listing_data["title"],
-                "description": listing_data["description"],
-                "category": listing_data["category"],
-                "attributes": listing_data["attributes"]
-            })
+            "body": json.dumps(listing)
         }
 
     except Exception as e:

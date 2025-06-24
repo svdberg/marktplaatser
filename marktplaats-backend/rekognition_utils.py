@@ -1,4 +1,8 @@
-def analyze_image_with_rekognition(client, image_bytes):
+import boto3
+
+def extract_labels_and_text(image_bytes):
+    client = boto3.client("rekognition")
+
     # Detect labels from image bytes
     label_response = client.detect_labels(
         Image={"Bytes": image_bytes},
