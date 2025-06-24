@@ -4,9 +4,18 @@ import base64
 import boto3
 from bedrock_utils import generate_listing_with_bedrock
 from rekognition_utils import extract_labels_and_text
-from category_matcher import match_category_name, fetch_marktplaats_categories, flatten_categories
+from category_matcher import (
+    match_category_name,
+    fetch_marktplaats_categories,
+    flatten_categories,
+)
+from attribute_mapper import (
+    fetch_category_attributes,
+    map_ai_attributes_to_marktplaats,
+)
 
 s3 = boto3.client("s3")
+
 
 def lambda_handler(event, context):
     try:
@@ -21,7 +30,6 @@ def lambda_handler(event, context):
 
         cats = fetch_marktplaats_categories()
         flat = flatten_categories(cats)
-    
 
         # Match category
         category_match = match_category_name(listing_data.get("category", ""), flat)
@@ -31,13 +39,20 @@ def lambda_handler(event, context):
                 "body": json.dumps({"error": "Could not match category"})
             }
 
+        # Map AI attributes to Marktplaats attributes
+        mp_attributes = fetch_category_attributes(category_match["categoryId"])
+        mapped_attributes = map_ai_attributes_to_marktplaats(
+            listing_data.get("attributes", {}),
+            mp_attributes,
+        )
+
         # Build listing result
         listing = {
             "title": listing_data["title"],
             "description": listing_data["description"],
             "categoryId": category_match["categoryId"],
             "categoryName": category_match["match"],
-            "attributes": listing_data["attributes"]
+            "attributes": mapped_attributes,
         }
 
         return {
