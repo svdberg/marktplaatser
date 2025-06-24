@@ -39,6 +39,13 @@ functions:
           path: generate-listing
           method: post
           cors: true
+  placeListing:
+    handler: place_listing_lambda.lambda_handler
+    events:
+      - http:
+          path: place-listing
+          method: post
+          cors: true
 
 plugins:
   - serverless-python-requirements
