@@ -8,6 +8,7 @@ This is a serverless AWS Lambda application for generating marketplace listings 
 
 **Core Components:**
 - `generate_listing_lambda.py` - Main Lambda handler that orchestrates the image processing pipeline
+- `place_listing_lambda.py` - Posts the generated listing to the Marktplaats API
 - `rekognition_utils.py` - AWS Rekognition integration for image analysis (label detection and text extraction)
 - The serverless configuration references a `handler.py` module that is not present.
 
@@ -25,7 +26,9 @@ The application uses Serverless Framework for deployment configuration (`serverl
 - Region: eu-west-1
 - Memory: 512MB
 - Timeout: 30s
-- HTTP endpoint: POST `/generate-listing`
+- HTTP endpoints:
+  - POST `/generate-listing`
+  - POST `/place-listing`
 
 **Required AWS permissions:**
 - Rekognition: DetectLabels, DetectText
@@ -41,7 +44,8 @@ pip install -r marktplaats-backend/requirements.txt
 
 **Deploy to AWS:**
 ```bash
-export MARKTPLAATS_TOKEN=your_api_token
+export MARKTPLAATS_CLIENT_ID=your_client_id
+export MARKTPLAATS_CLIENT_SECRET=your_client_secret
 cd marktplaats-backend
 ./deploy.sh
 ```
@@ -51,6 +55,7 @@ API endpoint to `endpoint.txt`.
 **Test the deployed function:**
 ```bash
 cd marktplaats-backend
+export API_BASE=$(cat endpoint.txt)
 ./test.sh
 ```
 
@@ -58,6 +63,7 @@ cd marktplaats-backend
 ```bash
 cd marktplaats-backend
 serverless invoke local -f generateListing
+serverless invoke local -f placeListing --data '{"title": "test", "description": "desc"}'
 ```
 
 ## Missing Implementation Files
@@ -71,6 +77,7 @@ Update the S3 bucket name in both:
 - `generate_listing_lambda.py:9` (`s3_bucket` variable)
 - `serverless.yaml:10` (`S3_BUCKET` environment variable)
 
-Set your Marktplaats API token via the `MARKTPLAATS_TOKEN` environment
-variable so that `category_matcher.py` can authenticate to the API.
+Set your Marktplaats API credentials via the `MARKTPLAATS_CLIENT_ID` and
+`MARKTPLAATS_CLIENT_SECRET` environment variables so that the lambdas can
+authenticate to the API.
 
