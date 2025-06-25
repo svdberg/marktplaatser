@@ -21,8 +21,10 @@ provider:
         - Effect: Allow
           Action:
             - s3:PutObject
+            - s3:PutObjectAcl
             - s3:GetObject
             - s3:ListBucket
+            - s3:DeleteObject
           Resource:
             - arn:aws:s3:::marktplaatser-images
             - arn:aws:s3:::marktplaatser-images/*
@@ -37,6 +39,15 @@ functions:
     events:
       - http:
           path: generate-listing
+          method: post
+          cors: true
+          
+  createAdvertisement:
+    handler: src/marktplaats_backend/create_advertisement_lambda.lambda_handler
+    timeout: 60
+    events:
+      - http:
+          path: create-advertisement
           method: post
           cors: true
 
