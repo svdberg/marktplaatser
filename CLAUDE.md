@@ -4,19 +4,84 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a serverless AWS Lambda application for generating marketplace listings from images. The system processes uploaded images through AWS Rekognition for object detection and text extraction, then uses AWS Bedrock to generate structured listing data.
+This is a serverless AWS Lambda application for generating marketplace listings from images. The system processes uploaded images through AWS Rekognition for object detection and text extraction, then uses AWS Bedrock to generate structured listing data that matches Marktplaats categories and attributes.
 
 **Core Components:**
-- `generate_listing_lambda.py` - Main Lambda handler that orchestrates the image processing pipeline
-- `rekognition_utils.py` - AWS Rekognition integration for image analysis (label detection and text extraction)
-- The serverless configuration references a `handler.py` module that is not present.
+- `src/marktplaats_backend/generate_listing_lambda.py` - Main Lambda handler
+- `src/marktplaats_backend/rekognition_utils.py` - AWS Rekognition integration
+- `src/marktplaats_backend/bedrock_utils.py` - AWS Bedrock/Claude integration
+- `src/marktplaats_backend/category_matcher.py` - Marktplaats category matching
+- `src/marktplaats_backend/attribute_mapper.py` - Attribute mapping to Marktplaats format
+- `src/marktplaats_backend/s3_utils.py` - S3 operations
+- `src/marktplaats_backend/marktplaats_auth.py` - Marktplaats API authentication
 
 **Data Flow:**
 1. Lambda receives base64-encoded image via HTTP POST
-2. Image is uploaded to S3 bucket
-3. Rekognition analyzes image for labels and text
-4. Bedrock generates listing title, description, category, and attributes
-5. Structured JSON response returned to client
+2. Rekognition analyzes image for labels and text
+3. Bedrock generates listing title, description, category, and attributes
+4. Categories are matched against Marktplaats taxonomy using fuzzy matching
+5. AI attributes are mapped to Marktplaats attribute schema
+6. Structured JSON response returned to client
+
+## Project Structure
+
+```
+marktplaats-backend/
+├── src/marktplaats_backend/     # Source code package
+├── tests/                       # Test files
+├── deploy.sh                    # Deployment script
+├── test.sh                      # Test script
+├── serverless.yaml              # Serverless config
+├── requirements.txt             # Python dependencies
+├── setup.py                     # Package setup
+└── pyproject.toml              # Modern Python config
+```
+
+## Development Commands
+
+**Install dependencies:**
+```bash
+cd marktplaats-backend
+pip install -r requirements.txt
+# For development
+pip install -e ".[dev]"
+```
+
+**Run tests:**
+```bash
+# All tests
+python -m pytest tests/ -v
+# Specific test
+python tests/test_attribute_mapping.py
+python tests/test_integration.py
+```
+
+**Code quality:**
+```bash
+flake8 src/ tests/
+black src/ tests/
+mypy src/
+```
+
+**Deploy to AWS:**
+```bash
+export MARKTPLAATS_CLIENT_ID=your_client_id
+export MARKTPLAATS_CLIENT_SECRET=your_client_secret
+cd marktplaats-backend
+./deploy.sh
+```
+
+**Test the deployed function:**
+```bash
+cd marktplaats-backend
+./test.sh sample.jpg
+```
+
+**Local testing:**
+```bash
+cd marktplaats-backend
+serverless invoke local -f generateListing
+```
 
 ## Deployment & Infrastructure
 
@@ -29,48 +94,19 @@ The application uses Serverless Framework for deployment configuration (`serverl
 
 **Required AWS permissions:**
 - Rekognition: DetectLabels, DetectText
-- S3: PutObject, GetObject
+- S3: PutObject, GetObject, ListBucket
 - Bedrock: InvokeModel
-
-## Development Commands
-
-**Install dependencies:**
-```bash
-pip install -r marktplaats-backend/requirements.txt
-```
-
-**Deploy to AWS:**
-```bash
-export MARKTPLAATS_TOKEN=your_api_token
-cd marktplaats-backend
-./deploy.sh
-```
-This script creates the S3 bucket if needed, deploys the stack and writes the
-API endpoint to `endpoint.txt`.
-
-**Test the deployed function:**
-```bash
-cd marktplaats-backend
-./test.sh
-```
-
-**Local testing:**
-```bash
-cd marktplaats-backend
-serverless invoke local -f generateListing
-```
-
-## Missing Implementation Files
-
-The following utility modules are imported but not present in the codebase:
-- `handler.py` - Expected by serverless.yaml but main handler is in `generate_listing_lambda.py`
 
 ## Configuration
 
-Update the S3 bucket name in both:
-- `generate_listing_lambda.py:9` (`s3_bucket` variable)
-- `serverless.yaml:10` (`S3_BUCKET` environment variable)
+**Environment Variables:**
+- `MARKTPLAATS_CLIENT_ID` - Marktplaats API client ID
+- `MARKTPLAATS_CLIENT_SECRET` - Marktplaats API client secret
+- `S3_BUCKET` - S3 bucket name (marktplaatser-images)
 
-Set your Marktplaats API token via the `MARKTPLAATS_TOKEN` environment
-variable so that `category_matcher.py` can authenticate to the API.
+**Key Implementation Notes:**
+- Marktplaats API attributes only work for level 2 categories
+- API response uses "fields" array with "key" identifiers
+- Fuzzy string matching with 0.6 cutoff for attribute mapping
+- Proper relative imports using dot notation in source code
 

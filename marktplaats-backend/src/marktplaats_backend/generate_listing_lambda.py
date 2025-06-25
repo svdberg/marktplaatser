@@ -2,14 +2,14 @@ import json
 import os
 import base64
 import boto3
-from bedrock_utils import generate_listing_with_bedrock
-from rekognition_utils import extract_labels_and_text
-from category_matcher import (
+from .bedrock_utils import generate_listing_with_bedrock
+from .rekognition_utils import extract_labels_and_text
+from .category_matcher import (
     match_category_name,
     fetch_marktplaats_categories,
     flatten_categories,
 )
-from attribute_mapper import (
+from .attribute_mapper import (
     fetch_category_attributes,
     map_ai_attributes_to_marktplaats,
 )
@@ -27,9 +27,11 @@ def lambda_handler(event, context):
 
         # Generate listing with Claude
         listing_data = generate_listing_with_bedrock(labels, text)
+        print(listing_data)
 
         cats = fetch_marktplaats_categories()
         flat = flatten_categories(cats)
+        print(flat)
 
         # Match category
         category_match = match_category_name(listing_data.get("category", ""), flat)
@@ -40,11 +42,17 @@ def lambda_handler(event, context):
             }
 
         # Map AI attributes to Marktplaats attributes
-        mp_attributes = fetch_category_attributes(category_match["categoryId"])
-        mapped_attributes = map_ai_attributes_to_marktplaats(
-            listing_data.get("attributes", {}),
-            mp_attributes,
-        )
+        try:
+            mp_attributes = fetch_category_attributes(category_match["categoryId"], flat)
+            print(mp_attributes)
+            mapped_attributes = map_ai_attributes_to_marktplaats(
+                listing_data.get("attributes", {}),
+                mp_attributes,
+            )
+        except ValueError as e:
+            print("No attributes mapped: "+e)
+            # Category doesn't support attributes (not level 2)
+            mapped_attributes = []
 
         # Build listing result
         listing = {

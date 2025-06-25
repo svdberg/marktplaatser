@@ -7,7 +7,7 @@ if os.environ.get("IS_LOCAL"):
 from difflib import get_close_matches
 
 import requests
-from marktplaats_auth import get_marktplaats_access_token
+from .marktplaats_auth import get_marktplaats_access_token
 
 MARKTPLAATS_API_BASE = "https://api.marktplaats.nl/v1"
 

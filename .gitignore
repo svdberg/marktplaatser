@@ -9,7 +9,20 @@ node_modules/
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 *.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+.mypy_cache/
+.tox/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
 
 # AWS
 .aws/
@@ -18,6 +31,7 @@ __pycache__/
 endpoint.txt
 image.txt
 payload.json
+*.jpg
 *.png
 *.gif
 
@@ -31,4 +45,5 @@ payload.json
 .DS_Store
 Thumbs.db
 
-.env
+# Local development
+.env.local

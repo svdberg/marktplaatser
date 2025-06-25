@@ -33,7 +33,7 @@ provider:
 
 functions:
   generateListing:
-    handler: generate_listing_lambda.lambda_handler
+    handler: src/marktplaats_backend/generate_listing_lambda.lambda_handler
     events:
       - http:
           path: generate-listing
