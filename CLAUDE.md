@@ -17,9 +17,9 @@ This is a serverless AWS Lambda application for generating marketplace listings 
 
 **Data Flow:**
 1. Lambda receives base64-encoded image via HTTP POST
-2. Rekognition analyzes image for labels and text
-3. Bedrock generates listing title, description, category, and attributes
-4. Categories are matched against Marktplaats taxonomy using fuzzy matching
+2. Fetch Marktplaats categories from API (level 2 categories that support attributes)
+3. Rekognition analyzes image for labels and text
+4. Bedrock generates listing with category list as input (exact category selection)
 5. AI attributes are mapped to Marktplaats attribute schema
 6. Structured JSON response returned to client
 
@@ -107,6 +107,8 @@ The application uses Serverless Framework for deployment configuration (`serverl
 **Key Implementation Notes:**
 - Marktplaats API attributes only work for level 2 categories
 - API response uses "fields" array with "key" identifiers
+- Categories are provided to Claude for exact selection (no fuzzy matching needed)
+- Only level 2 categories are sent to Claude (filtered from full list)
 - Fuzzy string matching with 0.6 cutoff for attribute mapping
 - Proper relative imports using dot notation in source code
 

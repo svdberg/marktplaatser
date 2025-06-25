@@ -2,6 +2,7 @@ import os
 
 if os.environ.get("IS_LOCAL"):
     from dotenv import load_dotenv
+
     load_dotenv()
 
 import requests
@@ -24,3 +25,8 @@ def get_marktplaats_access_token():
     )
     response.raise_for_status()
     return response.json()["access_token"]
+
+
+# Optional test harness
+if __name__ == "__main__":
+    print(get_marktplaats_access_token())

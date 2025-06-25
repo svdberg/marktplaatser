@@ -49,8 +49,14 @@ def simplify_path(path):
     return path.strip()
 
 def match_category_name(suggested_path, flat_categories):
+    # Filter to only level 2 categories (exactly one '>' separator)
+    level_2_categories = [
+        cat for cat in flat_categories 
+        if cat["name"].count(" > ") == 1
+    ]
+    
     simplified_path = simplify_path(suggested_path)
-    name_to_id = {cat["name"]: cat["id"] for cat in flat_categories}
+    name_to_id = {cat["name"]: cat["id"] for cat in level_2_categories}
     matches = get_close_matches(simplified_path, name_to_id.keys(), n=1, cutoff=0.6)
     if matches:
         match_name = matches[0]

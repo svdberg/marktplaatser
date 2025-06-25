@@ -2,6 +2,9 @@ import json
 import os
 import base64
 import boto3
+
+# Force AWS region to eu-west-1 at the very start
+os.environ['AWS_REGION'] = 'eu-west-1'
 from .bedrock_utils import generate_listing_with_bedrock
 from .rekognition_utils import extract_labels_and_text
 from .category_matcher import (
@@ -14,7 +17,7 @@ from .attribute_mapper import (
     map_ai_attributes_to_marktplaats,
 )
 
-s3 = boto3.client("s3")
+s3 = boto3.client("s3", region_name="eu-west-1")
 
 
 def lambda_handler(event, context):
@@ -25,26 +28,27 @@ def lambda_handler(event, context):
         # Extract labels and text using Rekognition
         labels, text = extract_labels_and_text(image_data)
 
-        # Generate listing with Claude
-        listing_data = generate_listing_with_bedrock(labels, text)
-        print(listing_data)
-
+        # Fetch Marktplaats categories first
         cats = fetch_marktplaats_categories()
         flat = flatten_categories(cats)
-        print(flat)
 
-        # Match category
+        # Generate listing with Claude, providing the category list
+        listing_data = generate_listing_with_bedrock(labels, text, flat)
+
+        # Find exact category match (should be perfect now)
         category_match = match_category_name(listing_data.get("category", ""), flat)
         if not category_match:
             return {
                 "statusCode": 400,
-                "body": json.dumps({"error": "Could not match category"})
+                "body": json.dumps({
+                    "error": "Could not match category", 
+                    "suggested_category": listing_data.get("category", "")
+                })
             }
 
         # Map AI attributes to Marktplaats attributes
         try:
             mp_attributes = fetch_category_attributes(category_match["categoryId"], flat)
-            print(mp_attributes)
             mapped_attributes = map_ai_attributes_to_marktplaats(
                 listing_data.get("attributes", {}),
                 mp_attributes,

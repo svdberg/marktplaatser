@@ -9,6 +9,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from marktplaats_backend.attribute_mapper import map_ai_attributes_to_marktplaats
+from marktplaats_backend.bedrock_utils import _filter_categories_for_claude
 
 
 def test_car_listing_integration():

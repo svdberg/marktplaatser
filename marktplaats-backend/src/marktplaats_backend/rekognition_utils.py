@@ -1,7 +1,7 @@
 import boto3
 
 def extract_labels_and_text(image_bytes):
-    client = boto3.client("rekognition")
+    client = boto3.client("rekognition", region_name="eu-west-1")
 
     # Detect labels from image bytes
     label_response = client.detect_labels(
