@@ -60,6 +60,7 @@ def lambda_handler(event, context):
         image_base64 = body.get("image")
         user_details = body.get("userDetails", {})
         user_id = body.get("userId")
+        category_override = body.get("categoryOverride")  # Optional category override
         
         # Validate input
         if not listing_data:
@@ -109,6 +110,17 @@ def lambda_handler(event, context):
         # Extract user details
         postcode = user_details.get("postcode")
         price_model = user_details.get("priceModel")
+        
+        # Convert price from euros to cents (Marktplaats API expects cents)
+        if price_model and "askingPrice" in price_model:
+            # Convert euros to cents (multiply by 100)
+            euro_price = price_model["askingPrice"]
+            price_model["askingPrice"] = int(euro_price * 100)
+        
+        # Apply category override if provided
+        if category_override:
+            print(f"Overriding category from {listing_data.get('categoryId')} to {category_override}")
+            listing_data["categoryId"] = category_override
         
         # Validate advertisement data
         validation_errors = validate_advertisement_data(

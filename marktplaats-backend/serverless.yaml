@@ -106,6 +106,23 @@ functions:
           path: oauth/callback
           method: get
           cors: true
+          
+  getCategories:
+    handler: src/marktplaats_backend/categories_lambda.lambda_handler
+    events:
+      - http:
+          path: categories
+          method: get
+          cors:
+            origin: 'http://localhost:3000'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
 
 resources:
   Resources:

@@ -126,15 +126,13 @@
               ></textarea>
             </div>
 
-            <div>
-              <label class="block text-sm font-medium text-gray-700">Category</label>
-              <input
-                :value="generatedListing.categoryName"
-                type="text"
-                readonly
-                class="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm"
-              >
-            </div>
+            <!-- Category Selector Component -->
+            <CategorySelector
+              :original-category-id="generatedListing.categoryId"
+              :original-category-name="generatedListing.categoryName"
+              v-model="categoryOverride"
+              @category-changed="onCategoryChanged"
+            />
 
             <div>
               <label class="block text-sm font-medium text-gray-700">Price (€)</label>
@@ -218,6 +216,7 @@ const loadingMessage = ref('')
 const error = ref(null)
 const price = ref(50)
 const postcode = ref('1234AB')
+const categoryOverride = ref(null)
 
 // Check for stored user ID on mount
 onMounted(() => {
@@ -244,6 +243,7 @@ const logout = () => {
   generatedListing.value = null
   createdAd.value = null
   error.value = null
+  categoryOverride.value = null
 }
 
 const handleFileSelect = (event) => {
@@ -260,6 +260,7 @@ const handleFileSelect = (event) => {
     generatedListing.value = null
     createdAd.value = null
     error.value = null
+    categoryOverride.value = null
   }
 }
 
@@ -341,7 +342,8 @@ const createAdvertisement = async () => {
             askingPrice: price.value
           }
         },
-        userId: userToken.value
+        userId: userToken.value,
+        categoryOverride: categoryOverride.value
       })
     })
     
@@ -358,6 +360,11 @@ const createAdvertisement = async () => {
   } finally {
     creating.value = false
   }
+}
+
+const onCategoryChanged = (newCategoryId) => {
+  console.log('Category changed to:', newCategoryId)
+  // Category override is automatically updated via v-model
 }
 
 // Utility function
