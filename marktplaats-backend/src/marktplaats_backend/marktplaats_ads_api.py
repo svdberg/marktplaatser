@@ -1,7 +1,6 @@
 import os
 import requests
-import json
-from .marktplaats_auth import get_marktplaats_access_token
+from .marktplaats_auth import get_marktplaats_access_token, get_user_token
 
 if os.environ.get("IS_LOCAL"):
     from dotenv import load_dotenv
@@ -10,7 +9,7 @@ if os.environ.get("IS_LOCAL"):
 MARKTPLAATS_API_BASE = "https://api.marktplaats.nl/v1"
 
 
-def create_advertisement(title, description, category_id, postcode, price_model, attributes=None):
+def create_advertisement(title, description, category_id, postcode, price_model, attributes=None, user_id=None):
     """
     Create a new advertisement on Marktplaats.
     
@@ -21,6 +20,7 @@ def create_advertisement(title, description, category_id, postcode, price_model,
         postcode (str): Location postcode
         price_model (dict): Price model with modelType and askingPrice
         attributes (list): List of category-specific attributes
+        user_id (str): User ID for token retrieval (if None, uses client token)
         
     Returns:
         dict: Advertisement creation response with ID and links
@@ -36,8 +36,14 @@ def create_advertisement(title, description, category_id, postcode, price_model,
     if not isinstance(price_model, dict) or 'modelType' not in price_model:
         raise ValueError("Invalid price_model format")
     
-    # Get access token
-    token = get_marktplaats_access_token()
+    # Get access token (user token if user_id provided, otherwise client token)
+    if user_id:
+        try:
+            token = get_user_token(user_id)
+        except ValueError as e:
+            raise ValueError(f"Failed to get user token: {str(e)}")
+    else:
+        token = get_marktplaats_access_token()
     
     # Build request payload
     payload = {
@@ -220,3 +226,29 @@ def validate_advertisement_data(listing_data, postcode, price_model):
         errors.append("Invalid price model type")
         
     return errors
+
+
+def get_me():
+    """
+    Get current user information from Marktplaats API.
+    
+    Returns:
+        dict: User information including ID, type, and permissions
+        
+    Raises:
+        requests.HTTPError: If API call fails
+    """
+    token = get_marktplaats_access_token()
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json"
+    }
+    
+    response = requests.get(
+        f"{MARKTPLAATS_API_BASE}/me",
+        headers=headers
+    )
+    
+    response.raise_for_status()
+    return response.json()

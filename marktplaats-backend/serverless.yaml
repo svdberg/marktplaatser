@@ -32,6 +32,14 @@ provider:
           Action:
             - bedrock:InvokeModel
           Resource: "*"
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - arn:aws:dynamodb:eu-west-1:*:table/marktplaats-user-tokens
 
 functions:
   generateListing:
@@ -50,6 +58,36 @@ functions:
           path: create-advertisement
           method: post
           cors: true
+          
+  oauthAuthorize:
+    handler: src/marktplaats_backend/oauth_authorize_lambda.lambda_handler
+    events:
+      - http:
+          path: oauth/authorize
+          method: get
+          cors: true
+          
+  oauthCallback:
+    handler: src/marktplaats_backend/oauth_callback_lambda.lambda_handler
+    events:
+      - http:
+          path: oauth/callback
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    UserTokensTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: marktplaats-user-tokens
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
 
 plugins:
   - serverless-python-requirements

@@ -47,6 +47,7 @@ def lambda_handler(event, context):
         listing_data = body.get("listingData", {})
         image_base64 = body.get("image")
         user_details = body.get("userDetails", {})
+        user_id = body.get("userId")
         
         # Validate input
         if not listing_data:
@@ -65,6 +66,12 @@ def lambda_handler(event, context):
             return {
                 "statusCode": 400,
                 "body": json.dumps({"error": "userDetails is required"})
+            }
+            
+        if not user_id:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "userId is required for authorization"})
             }
         
         # Extract user details
@@ -152,7 +159,8 @@ def lambda_handler(event, context):
                 category_id=category_id,
                 postcode=postcode,
                 price_model=price_model,
-                attributes=listing_data.get("attributes", [])
+                attributes=listing_data.get("attributes", []),
+                user_id=user_id
             )
             
             advertisement_id = ad_response.get("id")
