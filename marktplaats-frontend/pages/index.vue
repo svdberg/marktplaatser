@@ -275,6 +275,8 @@ const generateListing = async () => {
     const base64 = await fileToBase64(selectedFile.value)
     
     // Call generate listing API
+    console.log('Calling API:', `${config.public.apiBaseUrl}/generate-listing`)
+    
     const response = await fetch(`${config.public.apiBaseUrl}/generate-listing`, {
       method: 'POST',
       headers: {
@@ -285,7 +287,16 @@ const generateListing = async () => {
       })
     })
     
+    console.log('API response status:', response.status)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('API error response:', errorText)
+      throw new Error(`API returned ${response.status}: ${errorText}`)
+    }
+    
     const data = await response.json()
+    console.log('API response data:', data)
     
     if (data.error) {
       throw new Error(data.error)

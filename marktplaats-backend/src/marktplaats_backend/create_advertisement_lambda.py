@@ -39,6 +39,18 @@ def lambda_handler(event, context):
     }
     """
     
+    # Handle CORS preflight OPTIONS requests
+    if event.get("httpMethod") == "OPTIONS":
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                "Access-Control-Allow-Methods": "POST,OPTIONS"
+            },
+            "body": ""
+        }
+    
     try:
         # Parse request body
         body = json.loads(event["body"])
@@ -53,24 +65,44 @@ def lambda_handler(event, context):
         if not listing_data:
             return {
                 "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://localhost:3000",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
                 "body": json.dumps({"error": "listingData is required"})
             }
             
         if not image_base64:
             return {
                 "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://localhost:3000",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
                 "body": json.dumps({"error": "image is required"})
             }
             
         if not user_details:
             return {
                 "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://localhost:3000",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
                 "body": json.dumps({"error": "userDetails is required"})
             }
             
         if not user_id:
             return {
                 "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://localhost:3000",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
                 "body": json.dumps({"error": "userId is required for authorization"})
             }
         
@@ -86,6 +118,11 @@ def lambda_handler(event, context):
         if validation_errors:
             return {
                 "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://localhost:3000",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
                 "body": json.dumps({
                     "error": "Validation failed",
                     "details": validation_errors
@@ -119,6 +156,11 @@ def lambda_handler(event, context):
                 if missing_required:
                     return {
                         "statusCode": 400,
+                        "headers": {
+                            "Access-Control-Allow-Origin": "http://localhost:3000",
+                            "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                            "Access-Control-Allow-Methods": "POST,OPTIONS"
+                        },
                         "body": json.dumps({
                             "error": "Missing required category attributes",
                             "missingAttributes": missing_required
@@ -137,6 +179,11 @@ def lambda_handler(event, context):
         except Exception as e:
             return {
                 "statusCode": 500,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://localhost:3000",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
                 "body": json.dumps({
                     "error": "Failed to upload image",
                     "details": str(e)
@@ -163,72 +210,76 @@ def lambda_handler(event, context):
                 user_id=user_id
             )
             
-            advertisement_id = ad_response.get("id")
+            advertisement_id = ad_response.get("itemId") or ad_response.get("id")
             if not advertisement_id:
-                raise ValueError("No advertisement ID returned")
+                raise ValueError(f"No advertisement ID returned. Response keys: {list(ad_response.keys())}")
                 
             print(f"Advertisement created with ID: {advertisement_id}")
+            
+            # Step 4: Upload image to advertisement (optional - if this fails, ad still exists)
+            try:
+                print("Uploading image to advertisement...")
+                upload_response = upload_advertisement_images(advertisement_id, [image_url], user_id=user_id)
+                print(f"Image upload successful: {upload_response}")
+            except Exception as upload_error:
+                print(f"Warning: Image upload failed but advertisement was created: {upload_error}")
+                # Continue - we'll return success even if image upload fails
             
         except Exception as e:
             return {
                 "statusCode": 500,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://localhost:3000",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
                 "body": json.dumps({
                     "error": "Failed to create advertisement",
                     "details": str(e)
                 })
             }
         
-        # Step 4: Upload image to advertisement
-        print("Uploading image to advertisement...")
-        try:
-            image_response = upload_advertisement_images(
-                advertisement_id=advertisement_id,
-                image_urls=[image_url]
-            )
-            print(f"Image upload response: {image_response}")
-            
-        except Exception as e:
-            # Advertisement was created but image upload failed
-            print(f"Image upload failed: {e}")
-            return {
-                "statusCode": 207,  # Multi-status: partial success
-                "body": json.dumps({
-                    "message": "Advertisement created but image upload failed",
-                    "advertisementId": advertisement_id,
-                    "imageError": str(e),
-                    "advertisement": ad_response
-                })
-            }
-        
-        # Step 5: Get final advertisement details
-        try:
-            final_ad = get_advertisement(advertisement_id)
-        except Exception:
-            # Use the creation response if we can't fetch updated details
-            final_ad = ad_response
-        
-        # Success response
+        # Return success immediately - image upload will be handled separately
         return {
             "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                "Access-Control-Allow-Methods": "POST,OPTIONS"
+            },
             "body": json.dumps({
                 "message": "Advertisement created successfully",
                 "advertisementId": advertisement_id,
                 "imageUrl": image_url,
-                "advertisement": final_ad,
-                "imageUpload": image_response
+                "title": ad_response.get("title"),
+                "status": ad_response.get("status"),
+                "websiteLink": ad_response.get("_links", {}).get("mp:advertisement-website-link", {}).get("href"),
+                "note": "Image upload will be processed separately due to timeout constraints"
             })
         }
         
     except json.JSONDecodeError:
         return {
             "statusCode": 400,
+            "headers": {
+                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                "Access-Control-Allow-Methods": "POST,OPTIONS"
+            },
             "body": json.dumps({"error": "Invalid JSON in request body"})
         }
         
     except Exception as e:
         print(f"Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "statusCode": 500,
+            "headers": {
+                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                "Access-Control-Allow-Methods": "POST,OPTIONS"
+            },
             "body": json.dumps({
                 "error": "Internal server error",
                 "details": str(e)

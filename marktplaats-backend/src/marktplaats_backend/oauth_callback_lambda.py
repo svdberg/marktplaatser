@@ -21,9 +21,15 @@ def lambda_handler(event, context):
         # Get query parameters
         query_params = event.get('queryStringParameters', {}) or {}
         
+        print(f"Received query parameters: {query_params}")
+        print(f"Full event: {json.dumps(event)}")
+        
         authorization_code = query_params.get('code')
         state = query_params.get('state')
         error = query_params.get('error')
+        
+        print(f"Parsed authorization_code: {authorization_code}")
+        print(f"Parsed state: {state}")
         
         # Check for authorization errors
         if error:
@@ -75,21 +81,25 @@ def lambda_handler(event, context):
                 """
             }
         
-        # Build redirect URI (same as used in authorization request)
+        # Build redirect URI (must match exactly what was used in authorization request)
         request_context = event.get('requestContext', {})
         domain_name = request_context.get('domainName', 'localhost')
         stage = request_context.get('stage', 'dev')
         
-        # Use HTTPS for API Gateway
-        if domain_name == 'localhost':
-            redirect_uri = "http://localhost:3000/oauth/callback"
-        else:
-            redirect_uri = f"https://{domain_name}/{stage}/oauth/callback"
+        # This must match the redirect_uri used in the authorization request
+        redirect_uri = f"https://{domain_name}/{stage}/oauth/callback"
         
         # Exchange authorization code for access token
         try:
+            print(f"Exchanging code: {authorization_code}")
+            print(f"Redirect URI: {redirect_uri}")
             token_data = exchange_code_for_token(authorization_code, redirect_uri)
+            print(f"Token exchange successful: {token_data}")
         except Exception as e:
+            print(f"Token exchange error: {str(e)}")
+            print(f"Error type: {type(e)}")
+            import traceback
+            traceback.print_exc()
             return {
                 "statusCode": 500,
                 "headers": {
@@ -160,10 +170,10 @@ def lambda_handler(event, context):
                     // Store user ID in localStorage for the frontend
                     localStorage.setItem('marktplaats_user_id', '{user_id}');
                     
-                    // Auto-redirect to main app after 3 seconds
+                    // Auto-redirect to localhost callback page with user ID
                     setTimeout(() => {{
-                        window.location.href = '/';
-                    }}, 3000);
+                        window.location.href = 'http://localhost:3000/callback?user_id={user_id}';
+                    }}, 2000);
                 </script>
             </head>
             <body style="font-family: Arial, sans-serif; padding: 20px; text-align: center;">
@@ -172,7 +182,7 @@ def lambda_handler(event, context):
                 <p>User ID: <code>{user_id}</code></p>
                 <p>You can now create advertisements on Marktplaats.</p>
                 <p>Redirecting back to the main application...</p>
-                <a href="/">Continue to app</a>
+                <a href="http://localhost:3000/callback?user_id={user_id}">Continue to app</a>
             </body>
             </html>
             """

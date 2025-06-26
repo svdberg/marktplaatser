@@ -23,6 +23,7 @@ provider:
             - s3:PutObject
             - s3:PutObjectAcl
             - s3:GetObject
+            - s3:GetBucketLocation
             - s3:ListBucket
             - s3:DeleteObject
           Resource:
@@ -48,7 +49,16 @@ functions:
       - http:
           path: generate-listing
           method: post
-          cors: true
+          cors:
+            origin: 'http://localhost:3000'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
           
   createAdvertisement:
     handler: src/marktplaats_backend/create_advertisement_lambda.lambda_handler
@@ -57,7 +67,29 @@ functions:
       - http:
           path: create-advertisement
           method: post
-          cors: true
+          cors:
+            origin: 'http://localhost:3000'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: create-advertisement
+          method: options
+          cors:
+            origin: 'http://localhost:3000'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
           
   oauthAuthorize:
     handler: src/marktplaats_backend/oauth_authorize_lambda.lambda_handler

@@ -40,6 +40,11 @@ def lambda_handler(event, context):
         if not category_match:
             return {
                 "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://localhost:3000",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
                 "body": json.dumps({
                     "error": "Could not match category", 
                     "suggested_category": listing_data.get("category", "")
@@ -69,11 +74,24 @@ def lambda_handler(event, context):
 
         return {
             "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                "Access-Control-Allow-Methods": "POST,OPTIONS"
+            },
             "body": json.dumps(listing)
         }
 
     except Exception as e:
+        print(f"Lambda handler error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {
             "statusCode": 500,
+            "headers": {
+                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                "Access-Control-Allow-Methods": "POST,OPTIONS"
+            },
             "body": json.dumps({"error": str(e)})
         }

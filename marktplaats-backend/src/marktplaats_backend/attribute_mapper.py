@@ -49,17 +49,41 @@ def _normalize_ai_attributes(ai_attributes):
     return []
 
 def map_ai_attributes_to_marktplaats(ai_attributes, mp_attributes):
-    """Map AI generated attributes to Marktplaats attribute keys."""
+    """Map AI generated attributes to Marktplaats attribute keys and validate values."""
     normalized = _normalize_ai_attributes(ai_attributes)
     name_to_attr = {}
     for attr in mp_attributes:
         label = attr.get("labels", {}).get("nl-NL") or attr.get("label", "")
         if label:
             name_to_attr[label] = attr
+    
     mapped = []
     for ai_attr in normalized:
         matches = get_close_matches(ai_attr["name"], name_to_attr.keys(), n=1, cutoff=0.6)
         if matches:
             match = name_to_attr[matches[0]]
-            mapped.append({"key": match["key"], "value": ai_attr["value"]})
+            attr_key = match["key"]
+            ai_value = ai_attr["value"]
+            
+            # Handle enum/select fields with predefined values
+            if "options" in match:
+                valid_values = [opt.get("value", "") for opt in match["options"]]
+                # Try exact match first
+                if ai_value in valid_values:
+                    mapped_value = ai_value
+                else:
+                    # Try fuzzy matching for enum values
+                    value_matches = get_close_matches(ai_value, valid_values, n=1, cutoff=0.4)
+                    if value_matches:
+                        mapped_value = value_matches[0]
+                    else:
+                        # Skip invalid enum values
+                        print(f"Skipping invalid enum value '{ai_value}' for field '{attr_key}'. Valid values: {valid_values}")
+                        continue
+            else:
+                # Non-enum field, use value as-is
+                mapped_value = ai_value
+            
+            mapped.append({"key": attr_key, "value": mapped_value})
+    
     return mapped

@@ -30,9 +30,15 @@ def get_marktplaats_client_token():
         "client_secret": client_secret,
     }
 
+    print(f"Client credentials request data: {data}")
+    
     response = requests.post(
         f"{MARKTPLAATS_AUTH_BASE}/token", headers=headers, data=data
     )
+    
+    print(f"Client credentials response status: {response.status_code}")
+    print(f"Client credentials response body: {response.text}")
+    
     response.raise_for_status()
     return response.json()["access_token"]
 
@@ -87,9 +93,15 @@ def exchange_code_for_token(authorization_code, redirect_uri):
         "redirect_uri": redirect_uri,
     }
 
+    print(f"Token exchange request data: {data}")
+    
     response = requests.post(
         f"{MARKTPLAATS_AUTH_BASE}/token", headers=headers, data=data
     )
+    
+    print(f"Token exchange response status: {response.status_code}")
+    print(f"Token exchange response body: {response.text}")
+    
     response.raise_for_status()
     return response.json()
 
