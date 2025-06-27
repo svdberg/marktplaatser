@@ -274,3 +274,201 @@ def get_me():
     
     response.raise_for_status()
     return response.json()
+
+
+def list_user_advertisements(user_id, offset=None, limit=None):
+    """
+    List advertisements for a specific user.
+    
+    Args:
+        user_id (str): User ID for token retrieval
+        offset (int): Optional offset for pagination
+        limit (int): Optional limit for pagination (max 100)
+        
+    Returns:
+        dict: List of user's advertisements
+        
+    Raises:
+        requests.HTTPError: If API call fails
+        ValueError: If user token is invalid
+    """
+    if not user_id:
+        raise ValueError("User ID is required")
+    
+    # Get user-specific token
+    token = get_user_token(user_id)
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json"
+    }
+    
+    # Build query parameters
+    params = {}
+    if offset is not None:
+        params['offset'] = offset
+    if limit is not None:
+        params['limit'] = min(limit, 100)  # API max is 100
+    
+    print(f"Listing advertisements for user {user_id} with params: {params}")
+    
+    response = requests.get(
+        f"{MARKTPLAATS_API_BASE}/advertisements",
+        headers=headers,
+        params=params if params else None
+    )
+    
+    print(f"List advertisements response status: {response.status_code}")
+    print(f"List advertisements response body: {response.text}")
+    
+    response.raise_for_status()
+    return response.json()
+
+
+def get_user_advertisement(advertisement_id, user_id):
+    """
+    Get advertisement details for a specific user's advertisement.
+    
+    Args:
+        advertisement_id (str/int): Advertisement ID
+        user_id (str): User ID for token retrieval
+        
+    Returns:
+        dict: Advertisement details
+        
+    Raises:
+        requests.HTTPError: If API call fails
+        ValueError: If user token is invalid
+    """
+    if not advertisement_id:
+        raise ValueError("Advertisement ID is required")
+    if not user_id:
+        raise ValueError("User ID is required")
+    
+    # Get user-specific token
+    token = get_user_token(user_id)
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json"
+    }
+    
+    print(f"Getting advertisement {advertisement_id} for user {user_id}")
+    
+    response = requests.get(
+        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+        headers=headers
+    )
+    
+    print(f"Get advertisement response status: {response.status_code}")
+    print(f"Get advertisement response body: {response.text}")
+    
+    response.raise_for_status()
+    return response.json()
+
+
+def update_user_advertisement(advertisement_id, user_id, title=None, description=None, price_model=None, attributes=None):
+    """
+    Update an existing advertisement for a specific user.
+    
+    Args:
+        advertisement_id (str/int): Advertisement ID
+        user_id (str): User ID for token retrieval
+        title (str): Optional new title
+        description (str): Optional new description
+        price_model (dict): Optional new price model
+        attributes (list): Optional new attributes
+        
+    Returns:
+        dict: Update response
+        
+    Raises:
+        requests.HTTPError: If API call fails
+        ValueError: If parameters are invalid
+    """
+    if not advertisement_id:
+        raise ValueError("Advertisement ID is required")
+    if not user_id:
+        raise ValueError("User ID is required")
+    
+    # Build update payload with only provided fields
+    payload = {}
+    if title is not None:
+        payload['title'] = title
+    if description is not None:
+        payload['description'] = description
+    if price_model is not None:
+        if not isinstance(price_model, dict) or 'modelType' not in price_model:
+            raise ValueError("Invalid price_model format")
+        payload['priceModel'] = price_model
+    if attributes is not None:
+        payload['attributes'] = attributes
+    
+    if not payload:
+        raise ValueError("At least one field must be provided for update")
+    
+    # Get user-specific token
+    token = get_user_token(user_id)
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    
+    print(f"Updating advertisement {advertisement_id} for user {user_id}")
+    print(f"Update payload: {payload}")
+    
+    response = requests.put(
+        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+        headers=headers,
+        json=payload
+    )
+    
+    print(f"Update advertisement response status: {response.status_code}")
+    print(f"Update advertisement response body: {response.text}")
+    
+    response.raise_for_status()
+    return response.json()
+
+
+def delete_user_advertisement(advertisement_id, user_id):
+    """
+    Delete an advertisement for a specific user.
+    
+    Args:
+        advertisement_id (str/int): Advertisement ID
+        user_id (str): User ID for token retrieval
+        
+    Returns:
+        dict: Delete response
+        
+    Raises:
+        requests.HTTPError: If API call fails
+        ValueError: If parameters are invalid
+    """
+    if not advertisement_id:
+        raise ValueError("Advertisement ID is required")
+    if not user_id:
+        raise ValueError("User ID is required")
+    
+    # Get user-specific token
+    token = get_user_token(user_id)
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json"
+    }
+    
+    print(f"Deleting advertisement {advertisement_id} for user {user_id}")
+    
+    response = requests.delete(
+        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+        headers=headers
+    )
+    
+    print(f"Delete advertisement response status: {response.status_code}")
+    print(f"Delete advertisement response body: {response.text}")
+    
+    response.raise_for_status()
+    return response.json() if response.text else {"success": True}
