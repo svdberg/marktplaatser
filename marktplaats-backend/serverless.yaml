@@ -124,6 +124,122 @@ functions:
               - X-Amz-Security-Token
               - X-Amz-User-Agent
             allowCredentials: false
+            
+  listAdvertisements:
+    handler: src/marktplaats_backend/list_advertisements_lambda.lambda_handler
+    events:
+      - http:
+          path: list-advertisements
+          method: get
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: list-advertisements
+          method: options
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+            
+  getAdvertisementImages:
+    handler: src/marktplaats_backend/get_advertisement_images_lambda.lambda_handler
+    events:
+      - http:
+          path: advertisement-images/{id}
+          method: get
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: advertisement-images/{id}
+          method: options
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+            
+  manageAdvertisement:
+    handler: src/marktplaats_backend/manage_advertisement_lambda.lambda_handler
+    events:
+      - http:
+          path: manage-advertisement/{id}
+          method: get
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: manage-advertisement/{id}
+          method: patch
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: manage-advertisement/{id}
+          method: delete
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: manage-advertisement/{id}
+          method: options
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
 
 resources:
   Resources:

@@ -25,6 +25,10 @@
     @apply bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-500;
   }
   
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+  }
+  
   .card {
     @apply bg-white rounded-lg shadow-md p-6;
   }
