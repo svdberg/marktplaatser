@@ -13,6 +13,13 @@
             <div v-if="userToken" class="text-sm text-gray-600">
               ✅ Authorized
             </div>
+            <NuxtLink
+              v-if="userToken"
+              to="/listings"
+              class="btn btn-secondary"
+            >
+              📋 My Listings
+            </NuxtLink>
             <button
               v-if="!userToken"
               @click="authorize"
@@ -176,10 +183,21 @@
               v-if="createdAd.imageUrl"
               :href="createdAd.imageUrl"
               target="_blank"
-              class="text-primary hover:underline"
+              class="text-primary hover:underline block"
             >
               View uploaded image
             </a>
+          </div>
+          <div class="mt-4 flex space-x-3">
+            <NuxtLink to="/listings" class="btn btn-primary">
+              📋 View All My Listings
+            </NuxtLink>
+            <button
+              @click="createAnother"
+              class="btn btn-secondary"
+            >
+              ➕ Create Another
+            </button>
           </div>
         </div>
 
@@ -369,6 +387,23 @@ const createAdvertisement = async () => {
 const onCategoryChanged = (newCategoryId) => {
   console.log('Category changed to:', newCategoryId)
   // Category override is automatically updated via v-model
+}
+
+const createAnother = () => {
+  // Reset form to create another listing
+  selectedImage.value = null
+  selectedFile.value = null
+  generatedListing.value = null
+  createdAd.value = null
+  error.value = null
+  categoryOverride.value = null
+  price.value = 50
+  postcode.value = '1234AB'
+  
+  // Reset file input
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
 }
 
 // Utility function
