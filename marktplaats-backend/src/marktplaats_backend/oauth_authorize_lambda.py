@@ -26,10 +26,11 @@ def lambda_handler(event, context):
         domain_name = request_context.get('domainName', 'localhost')
         stage = request_context.get('stage', 'dev')
         
-        # Use HTTPS for API Gateway
+        # Configure redirect URI - must be the AWS Lambda callback URL
         if domain_name == 'localhost':
-            redirect_uri = "http://localhost:3000/oauth/callback"
+            redirect_uri = "http://localhost:8000/dev/oauth/callback"  # For local development
         else:
+            # Use AWS Lambda callback URL
             redirect_uri = f"https://{domain_name}/{stage}/oauth/callback"
         
         # Generate authorization URL

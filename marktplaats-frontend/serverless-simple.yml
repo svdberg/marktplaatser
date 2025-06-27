@@ -1,0 +1,59 @@
+service: marktplaats-frontend-simple
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: eu-west-1
+  stage: ${opt:stage, 'dev'}
+
+plugins:
+  - serverless-s3-sync
+
+custom:
+  s3Sync:
+    - bucketName: marktplaats-frontend-simple-${opt:stage, 'dev'}-website
+      localDir: .output/public
+      deleteRemoved: true
+      # acl: public-read  # Remove ACL - use bucket policy instead
+      defaultContentType: text/html
+      params:
+        - index.html:
+            CacheControl: 'max-age=0, no-cache, no-store, must-revalidate'
+        - "*.js":
+            CacheControl: 'max-age=31536000, public, immutable'
+        - "*.css":
+            CacheControl: 'max-age=31536000, public, immutable'
+
+resources:
+  Resources:
+    # S3 Bucket for hosting the website
+    WebsiteBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: marktplaats-frontend-simple-${opt:stage, 'dev'}-website
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+        WebsiteConfiguration:
+          IndexDocument: index.html
+          ErrorDocument: index.html
+
+    # S3 Bucket Policy for public read access
+    WebsiteBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref WebsiteBucket
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: "*"
+              Action: s3:GetObject
+              Resource: !Sub "${WebsiteBucket}/*"
+
+  Outputs:
+    WebsiteURL:
+      Description: Website URL
+      Value: !Sub "http://${WebsiteBucket}.s3-website.${AWS::Region}.amazonaws.com"

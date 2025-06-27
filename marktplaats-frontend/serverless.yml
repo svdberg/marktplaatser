@@ -1,0 +1,107 @@
+service: marktplaats-frontend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: eu-west-1
+  stage: ${opt:stage, 'dev'}
+
+plugins:
+  - serverless-s3-sync
+  - serverless-cloudformation-resource-counter
+
+custom:
+  s3Sync:
+    - bucketName: ${self:service}-${opt:stage, 'dev'}-website
+      localDir: .output/public
+      deleteRemoved: true
+      acl: public-read
+      defaultContentType: text/html
+      params:
+        - index.html:
+            CacheControl: 'max-age=0, no-cache, no-store, must-revalidate'
+        - "*.js":
+            CacheControl: 'max-age=31536000, public, immutable'
+        - "*.css":
+            CacheControl: 'max-age=31536000, public, immutable'
+        - "*.png":
+            CacheControl: 'max-age=31536000, public, immutable'
+        - "*.jpg":
+            CacheControl: 'max-age=31536000, public, immutable'
+        - "*.svg":
+            CacheControl: 'max-age=31536000, public, immutable'
+
+resources:
+  Resources:
+    # S3 Bucket for hosting the website
+    WebsiteBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:service}-${opt:stage, 'dev'}-website
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+        WebsiteConfiguration:
+          IndexDocument: index.html
+          ErrorDocument: 404.html
+
+    # S3 Bucket Policy for public read access
+    WebsiteBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref WebsiteBucket
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: "*"
+              Action: s3:GetObject
+              Resource: !Sub "${WebsiteBucket}/*"
+
+    # CloudFront Distribution for global CDN
+    CloudFrontDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Comment: ${self:service}-${opt:stage, 'dev'} Distribution
+          DefaultCacheBehavior:
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+          Origins:
+            - Id: S3Origin
+              DomainName: !Sub "${WebsiteBucket}.s3-website.${AWS::Region}.amazonaws.com"
+              CustomOriginConfig:
+                HTTPPort: 80
+                HTTPSPort: 443
+                OriginProtocolPolicy: http-only
+          Enabled: true
+          DefaultRootObject: index.html
+          CustomErrorResponses:
+            - ErrorCode: 404
+              ResponseCode: 200
+              ResponsePagePath: /404.html
+            - ErrorCode: 403
+              ResponseCode: 200
+              ResponsePagePath: /404.html
+          PriceClass: PriceClass_100 # Use only North America and Europe edge locations
+
+  Outputs:
+    WebsiteURL:
+      Description: Website URL
+      Value: !Sub "http://${WebsiteBucket}.s3-website.${AWS::Region}.amazonaws.com"
+    
+    CloudFrontURL:
+      Description: CloudFront Distribution URL
+      Value: !Sub "https://${CloudFrontDistribution.DomainName}"
+    
+    CloudFrontDistributionId:
+      Description: CloudFront Distribution ID
+      Value: !Ref CloudFrontDistribution

@@ -10,6 +10,7 @@ provider:
     S3_BUCKET: marktplaatser-images
     MARKTPLAATS_CLIENT_ID: ${env:MARKTPLAATS_CLIENT_ID}
     MARKTPLAATS_CLIENT_SECRET: ${env:MARKTPLAATS_CLIENT_SECRET}
+    FRONTEND_DOMAIN: marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com
   iam:
     role:
       statements:
@@ -50,7 +51,7 @@ functions:
           path: generate-listing
           method: post
           cors:
-            origin: 'http://localhost:3000'
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
             headers:
               - Content-Type
               - X-Amz-Date
@@ -68,7 +69,7 @@ functions:
           path: create-advertisement
           method: post
           cors:
-            origin: 'http://localhost:3000'
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
             headers:
               - Content-Type
               - X-Amz-Date
@@ -81,7 +82,7 @@ functions:
           path: create-advertisement
           method: options
           cors:
-            origin: 'http://localhost:3000'
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
             headers:
               - Content-Type
               - X-Amz-Date
@@ -114,7 +115,7 @@ functions:
           path: categories
           method: get
           cors:
-            origin: 'http://localhost:3000'
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
             headers:
               - Content-Type
               - X-Amz-Date

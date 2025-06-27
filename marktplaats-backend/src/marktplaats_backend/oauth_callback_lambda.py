@@ -87,7 +87,12 @@ def lambda_handler(event, context):
         stage = request_context.get('stage', 'dev')
         
         # This must match the redirect_uri used in the authorization request
-        redirect_uri = f"https://{domain_name}/{stage}/oauth/callback"
+        # The authorization request uses the AWS Lambda callback URL
+        if domain_name == 'localhost':
+            redirect_uri = "http://localhost:8000/dev/oauth/callback"  # For local development
+        else:
+            # Use AWS Lambda callback URL - same as in oauth_authorize_lambda.py
+            redirect_uri = f"https://{domain_name}/{stage}/oauth/callback"
         
         # Exchange authorization code for access token
         try:
@@ -153,7 +158,10 @@ def lambda_handler(event, context):
                 """
             }
         
-        # Success response with user ID for testing
+        # Get frontend domain
+        frontend_domain = os.environ.get('FRONTEND_DOMAIN', 'localhost:3000')
+        
+        # Return HTML page that stores user_id in localStorage and redirects
         return {
             "statusCode": 200,
             "headers": {
@@ -167,22 +175,20 @@ def lambda_handler(event, context):
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <script>
+                    console.log('OAuth callback: storing user_id in localStorage:', '{user_id}');
                     // Store user ID in localStorage for the frontend
                     localStorage.setItem('marktplaats_user_id', '{user_id}');
                     
-                    // Auto-redirect to localhost callback page with user ID
+                    // Redirect to frontend callback page with user_id in hash after short delay
                     setTimeout(() => {{
-                        window.location.href = 'http://localhost:3000/callback?user_id={user_id}';
-                    }}, 2000);
+                        console.log('Redirecting to: ','{frontend_domain}/callback#user_id={user_id}');
+                        window.location.href = 'http://{frontend_domain}/callback#user_id={user_id}';
+                    }}, 1000);
                 </script>
             </head>
             <body style="font-family: Arial, sans-serif; padding: 20px; text-align: center;">
                 <h1>✅ Authorization Successful!</h1>
-                <p>You have successfully authorized the application.</p>
-                <p>User ID: <code>{user_id}</code></p>
-                <p>You can now create advertisements on Marktplaats.</p>
-                <p>Redirecting back to the main application...</p>
-                <a href="http://localhost:3000/callback?user_id={user_id}">Continue to app</a>
+                <p>Redirecting to application...</p>
             </body>
             </html>
             """

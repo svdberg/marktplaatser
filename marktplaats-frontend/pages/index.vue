@@ -202,6 +202,8 @@
 </template>
 
 <script setup>
+import { generateUUID } from '~/utils/uuid.js'
+
 const config = useRuntimeConfig()
 
 // Reactive data
@@ -229,9 +231,11 @@ onMounted(() => {
 // File input ref
 const fileInput = ref()
 
+// UUID utility is now imported from utils/uuid.js
+
 // Methods
 const authorize = () => {
-  const userId = crypto.randomUUID()
+  const userId = generateUUID()
   const authUrl = `${config.public.apiBaseUrl}/oauth/authorize?user_id=${userId}`
   window.location.href = authUrl
 }

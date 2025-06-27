@@ -24,5 +24,9 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: 'static'
+  },
+  ssr: false, // Enable SPA mode for better compatibility with S3
+  generate: {
+    fallback: true // Generate 404.html for client-side routing
   }
 })

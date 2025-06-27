@@ -19,7 +19,7 @@ def lambda_handler(event, context):
         return {
             "statusCode": 200,
             "headers": {
-                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                 "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
                 "Access-Control-Allow-Methods": "GET,OPTIONS"
             },
@@ -54,7 +54,7 @@ def lambda_handler(event, context):
         return {
             "statusCode": 200,
             "headers": {
-                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                 "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
                 "Access-Control-Allow-Methods": "GET,OPTIONS"
             },
@@ -71,7 +71,7 @@ def lambda_handler(event, context):
         return {
             "statusCode": 500,
             "headers": {
-                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                 "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
                 "Access-Control-Allow-Methods": "GET,OPTIONS"
             },

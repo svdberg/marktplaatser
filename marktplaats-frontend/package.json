@@ -5,11 +5,16 @@
     "dev": "nuxt dev",
     "build": "nuxt build",
     "generate": "nuxt generate",
-    "preview": "nuxt preview"
+    "preview": "nuxt preview",
+    "deploy": "npm run generate && serverless deploy",
+    "deploy:sync": "serverless s3sync"
   },
   "devDependencies": {
     "@nuxt/devtools": "latest",
-    "nuxt": "^3.8.0"
+    "nuxt": "^3.8.0",
+    "serverless": "^3.38.0",
+    "serverless-s3-sync": "^3.2.0",
+    "serverless-cloudformation-resource-counter": "^1.0.0"
   },
   "dependencies": {
     "@nuxtjs/tailwindcss": "^6.8.4",
