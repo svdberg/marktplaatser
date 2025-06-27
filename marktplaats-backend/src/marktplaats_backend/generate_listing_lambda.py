@@ -5,7 +5,7 @@ import boto3
 
 # Force AWS region to eu-west-1 at the very start
 os.environ['AWS_REGION'] = 'eu-west-1'
-from .bedrock_utils import generate_listing_with_bedrock
+from .bedrock_utils import generate_listing_with_claude_vision
 from .rekognition_utils import extract_labels_and_text
 from .category_matcher import (
     match_category_name,
@@ -25,15 +25,21 @@ def lambda_handler(event, context):
         body = json.loads(event["body"])
         image_data = base64.b64decode(body["image"])
 
-        # Extract labels and text using Rekognition
+        # Extract labels and text using Rekognition for additional context
         labels, text = extract_labels_and_text(image_data)
 
         # Fetch Marktplaats categories first
         cats = fetch_marktplaats_categories()
         flat = flatten_categories(cats)
 
-        # Generate listing with Claude, providing the category list
-        listing_data = generate_listing_with_bedrock(labels, text, flat)
+        # Generate listing with Claude vision (much better than Rekognition-only approach)
+        # Pass Rekognition data as additional context for Claude
+        listing_data = generate_listing_with_claude_vision(
+            image_data=image_data,
+            rekognition_labels=labels,
+            rekognition_text=text,
+            available_categories=flat
+        )
 
         # Find exact category match (should be perfect now)
         category_match = match_category_name(listing_data.get("category", ""), flat)

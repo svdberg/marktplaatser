@@ -112,3 +112,6 @@ The application uses Serverless Framework for deployment configuration (`serverl
 - Fuzzy string matching with 0.6 cutoff for attribute mapping
 - Proper relative imports using dot notation in source code
 
+## Next Steps and Improvements
+
+- Snapshot this, pivot to using the image directly in Claude Sonnet 3.7 for recognition and description. Do this next to the kognition input.
