@@ -263,7 +263,8 @@ class TestAttributeMapping(unittest.TestCase):
         # Find the brand mapping
         brand_mapping = next((attr for attr in mapped if attr["key"] == "brand"), None)
         self.assertIsNotNone(brand_mapping)
-        self.assertEqual(brand_mapping["value"], "BMW")
+        # Should map the display label "BMW" to the API key "bmw"
+        self.assertEqual(brand_mapping["value"], "bmw")
 
     def test_case_insensitive_matching(self):
         """Test that matching works with different cases."""

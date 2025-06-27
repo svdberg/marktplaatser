@@ -1,7 +1,6 @@
 import os
 import requests
-import json
-from .marktplaats_auth import get_marktplaats_access_token
+from .marktplaats_auth import get_marktplaats_access_token, get_user_token
 
 if os.environ.get("IS_LOCAL"):
     from dotenv import load_dotenv
@@ -10,7 +9,7 @@ if os.environ.get("IS_LOCAL"):
 MARKTPLAATS_API_BASE = "https://api.marktplaats.nl/v1"
 
 
-def create_advertisement(title, description, category_id, postcode, price_model, attributes=None):
+def create_advertisement(title, description, category_id, postcode, price_model, attributes=None, user_id=None):
     """
     Create a new advertisement on Marktplaats.
     
@@ -21,6 +20,7 @@ def create_advertisement(title, description, category_id, postcode, price_model,
         postcode (str): Location postcode
         price_model (dict): Price model with modelType and askingPrice
         attributes (list): List of category-specific attributes
+        user_id (str): User ID for token retrieval (if None, uses client token)
         
     Returns:
         dict: Advertisement creation response with ID and links
@@ -36,8 +36,15 @@ def create_advertisement(title, description, category_id, postcode, price_model,
     if not isinstance(price_model, dict) or 'modelType' not in price_model:
         raise ValueError("Invalid price_model format")
     
-    # Get access token
-    token = get_marktplaats_access_token()
+    # Get access token (user token if user_id provided, otherwise client token)
+    if user_id:
+        try:
+            token = get_user_token(user_id)
+        except ValueError as e:
+            print(f"Warning: Failed to get user token for {user_id}: {str(e)}. Falling back to client credentials.")
+            token = get_marktplaats_access_token()
+    else:
+        token = get_marktplaats_access_token()
     
     # Build request payload
     payload = {
@@ -61,17 +68,23 @@ def create_advertisement(title, description, category_id, postcode, price_model,
         "Accept": "application/json"
     }
     
+    print(f"Creating advertisement with payload: {payload}")
+    print(f"Using headers: {headers}")
+    
     response = requests.post(
         f"{MARKTPLAATS_API_BASE}/advertisements",
         headers=headers,
         json=payload
     )
     
+    print(f"Advertisement creation response status: {response.status_code}")
+    print(f"Advertisement creation response body: {response.text}")
+    
     response.raise_for_status()
     return response.json()
 
 
-def upload_advertisement_images(advertisement_id, image_urls, replace_all=False):
+def upload_advertisement_images(advertisement_id, image_urls, replace_all=False, user_id=None):
     """
     Upload images to an existing advertisement.
     
@@ -79,6 +92,7 @@ def upload_advertisement_images(advertisement_id, image_urls, replace_all=False)
         advertisement_id (str/int): Advertisement ID
         image_urls (list): List of public image URLs
         replace_all (bool): Whether to replace existing images
+        user_id (str): User ID for token retrieval (if None, uses client token)
         
     Returns:
         dict: Image upload response
@@ -93,8 +107,15 @@ def upload_advertisement_images(advertisement_id, image_urls, replace_all=False)
     if not image_urls or not isinstance(image_urls, list):
         raise ValueError("image_urls must be a non-empty list")
     
-    # Get access token
-    token = get_marktplaats_access_token()
+    # Get access token (user token if user_id provided, otherwise client token)
+    if user_id:
+        try:
+            token = get_user_token(user_id)
+        except ValueError as e:
+            print(f"Warning: Failed to get user token for {user_id}: {str(e)}. Falling back to client credentials.")
+            token = get_marktplaats_access_token()
+    else:
+        token = get_marktplaats_access_token()
     
     # Build request payload
     payload = {
@@ -111,11 +132,18 @@ def upload_advertisement_images(advertisement_id, image_urls, replace_all=False)
         "Accept": "application/json"
     }
     
+    print(f"Uploading images to advertisement {advertisement_id}")
+    print(f"Image upload payload: {payload}")
+    print(f"Image upload headers: {headers}")
+    
     response = requests.post(
         f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}/images",
         headers=headers,
         json=payload
     )
+    
+    print(f"Image upload response status: {response.status_code}")
+    print(f"Image upload response body: {response.text}")
     
     response.raise_for_status()
     return response.json()
@@ -220,3 +248,29 @@ def validate_advertisement_data(listing_data, postcode, price_model):
         errors.append("Invalid price model type")
         
     return errors
+
+
+def get_me():
+    """
+    Get current user information from Marktplaats API.
+    
+    Returns:
+        dict: User information including ID, type, and permissions
+        
+    Raises:
+        requests.HTTPError: If API call fails
+    """
+    token = get_marktplaats_access_token()
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json"
+    }
+    
+    response = requests.get(
+        f"{MARKTPLAATS_API_BASE}/me",
+        headers=headers
+    )
+    
+    response.raise_for_status()
+    return response.json()

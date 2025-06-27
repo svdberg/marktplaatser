@@ -46,6 +46,11 @@ def lambda_handler(event, context):
         if not category_match:
             return {
                 "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
                 "body": json.dumps({
                     "error": "Could not match category", 
                     "suggested_category": listing_data.get("category", "")
@@ -60,8 +65,12 @@ def lambda_handler(event, context):
                 mp_attributes,
             )
         except ValueError as e:
-            print("No attributes mapped: "+e)
+            print(f"No attributes mapped (category doesn't support attributes): {e}")
             # Category doesn't support attributes (not level 2)
+            mapped_attributes = []
+        except Exception as e:
+            print(f"Error fetching/mapping attributes: {e}")
+            # On any other error, continue without attributes
             mapped_attributes = []
 
         # Build listing result
@@ -75,11 +84,24 @@ def lambda_handler(event, context):
 
         return {
             "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                "Access-Control-Allow-Methods": "POST,OPTIONS"
+            },
             "body": json.dumps(listing)
         }
 
     except Exception as e:
+        print(f"Lambda handler error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {
             "statusCode": 500,
+            "headers": {
+                "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                "Access-Control-Allow-Methods": "POST,OPTIONS"
+            },
             "body": json.dumps({"error": str(e)})
         }

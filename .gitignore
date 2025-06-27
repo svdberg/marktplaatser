@@ -47,3 +47,17 @@ Thumbs.db
 
 # Local development
 .env.local
+.env.production
+.env.development
+.env.staging
+
+# Nuxt.js
+marktplaats-frontend/.nuxt/
+.output/
+dist/
+.nitro/
+
+# Frontend build artifacts
+.next/
+out/
+build/

@@ -36,11 +36,22 @@ def upload_image_to_s3(image_base64, bucket_name=None):
         unique_id = str(uuid.uuid4())[:8]
         filename = f"listings/{timestamp}_{unique_id}.jpg"
         
-        # Create S3 client
-        session = boto3.Session(region_name="eu-west-1")
-        s3_client = session.client('s3')
+        # Create S3 client - first determine bucket region
+        session = boto3.Session()
+        s3_client = session.client('s3', region_name="eu-west-1")
         
-        # Upload image (bucket configured for public access)
+        # Get the bucket's actual region
+        try:
+            bucket_location = s3_client.get_bucket_location(Bucket=bucket_name)
+            bucket_region = bucket_location.get('LocationConstraint') or 'us-east-1'
+            
+            # Create a new client in the bucket's region for optimal performance
+            if bucket_region != 'eu-west-1':
+                s3_client = session.client('s3', region_name=bucket_region)
+        except Exception as e:
+            print(f"Warning: Could not get bucket location: {e}, using default region")
+        
+        # Upload image (bucket should be configured for public access via bucket policy)
         s3_client.put_object(
             Bucket=bucket_name,
             Key=filename,
@@ -48,11 +59,11 @@ def upload_image_to_s3(image_base64, bucket_name=None):
             ContentType='image/jpeg'
         )
         
-        # Generate pre-signed URL (valid for 24 hours)
+        # Generate pre-signed URL with longer expiration (7 days)
         presigned_url = s3_client.generate_presigned_url(
             'get_object',
             Params={'Bucket': bucket_name, 'Key': filename},
-            ExpiresIn=86400  # 24 hours
+            ExpiresIn=604800  # 7 days
         )
         
         return presigned_url

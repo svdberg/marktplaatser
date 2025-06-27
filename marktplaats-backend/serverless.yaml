@@ -10,6 +10,7 @@ provider:
     S3_BUCKET: marktplaatser-images
     MARKTPLAATS_CLIENT_ID: ${env:MARKTPLAATS_CLIENT_ID}
     MARKTPLAATS_CLIENT_SECRET: ${env:MARKTPLAATS_CLIENT_SECRET}
+    FRONTEND_DOMAIN: marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com
   iam:
     role:
       statements:
@@ -23,6 +24,7 @@ provider:
             - s3:PutObject
             - s3:PutObjectAcl
             - s3:GetObject
+            - s3:GetBucketLocation
             - s3:ListBucket
             - s3:DeleteObject
           Resource:
@@ -32,6 +34,14 @@ provider:
           Action:
             - bedrock:InvokeModel
           Resource: "*"
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - arn:aws:dynamodb:eu-west-1:*:table/marktplaats-user-tokens
 
 functions:
   generateListing:
@@ -40,7 +50,16 @@ functions:
       - http:
           path: generate-listing
           method: post
-          cors: true
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
           
   createAdvertisement:
     handler: src/marktplaats_backend/create_advertisement_lambda.lambda_handler
@@ -49,7 +68,76 @@ functions:
       - http:
           path: create-advertisement
           method: post
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: create-advertisement
+          method: options
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+          
+  oauthAuthorize:
+    handler: src/marktplaats_backend/oauth_authorize_lambda.lambda_handler
+    events:
+      - http:
+          path: oauth/authorize
+          method: get
           cors: true
+          
+  oauthCallback:
+    handler: src/marktplaats_backend/oauth_callback_lambda.lambda_handler
+    events:
+      - http:
+          path: oauth/callback
+          method: get
+          cors: true
+          
+  getCategories:
+    handler: src/marktplaats_backend/categories_lambda.lambda_handler
+    events:
+      - http:
+          path: categories
+          method: get
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+
+resources:
+  Resources:
+    UserTokensTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: marktplaats-user-tokens
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
 
 plugins:
   - serverless-python-requirements
