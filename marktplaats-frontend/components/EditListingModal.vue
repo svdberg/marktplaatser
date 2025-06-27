@@ -187,9 +187,10 @@ const loadListingDetails = async () => {
       throw new Error('User not authenticated')
     }
     
-    console.log('Loading details for listing:', props.listing.id)
+    const listingId = props.listing.itemId || props.listing.id
+    console.log('Loading details for listing:', listingId)
     
-    const response = await fetch(`${config.public.apiBaseUrl}/manage-advertisement/${props.listing.id}?user_id=${userToken}`, {
+    const response = await fetch(`${config.public.apiBaseUrl}/manage-advertisement/${listingId}?user_id=${userToken}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -261,7 +262,8 @@ const saveListing = async () => {
       throw new Error('User not authenticated')
     }
     
-    console.log('Saving listing:', props.listing.id)
+    const listingId = props.listing.itemId || props.listing.id
+    console.log('Saving listing:', listingId)
     
     const updateData = {
       title: form.value.title,
@@ -274,8 +276,8 @@ const saveListing = async () => {
     
     console.log('Update data:', updateData)
     
-    const response = await fetch(`${config.public.apiBaseUrl}/manage-advertisement/${props.listing.id}?user_id=${userToken}`, {
-      method: 'PUT',
+    const response = await fetch(`${config.public.apiBaseUrl}/manage-advertisement/${listingId}?user_id=${userToken}`, {
+      method: 'PATCH',
       headers: {
         'Content-Type': 'application/json'
       },

@@ -129,7 +129,7 @@
               </div>
               
               <div class="text-xs text-gray-400">
-                ID: {{ listing.id }}
+                ID: {{ listing.itemId || listing.id }}
               </div>
             </div>
 
@@ -144,9 +144,9 @@
               <button
                 @click="deleteListing(listing)"
                 class="btn btn-danger flex-1"
-                :disabled="deletingIds.includes(listing.id)"
+                :disabled="deletingIds.includes(listing.itemId || listing.id)"
               >
-                {{ deletingIds.includes(listing.id) ? '⏳' : '🗑️' }} Delete
+                {{ deletingIds.includes(listing.itemId || listing.id) ? '⏳' : '🗑️' }} Delete
               </button>
             </div>
           </div>
@@ -258,7 +258,15 @@ const loadListings = async () => {
     }
     
     // Extract the advertisements array from the response
-    listings.value = data.advertisements || data.items || []
+    // Marktplaats API returns HAL format: _embedded["mp:advertisements"]
+    if (data._embedded && data._embedded["mp:advertisements"]) {
+      listings.value = data._embedded["mp:advertisements"]
+    } else {
+      listings.value = data.advertisements || data.items || []
+    }
+    
+    // Load images for each listing
+    await loadImagesForListings()
     
   } catch (err) {
     console.error('Load listings error:', err)
@@ -280,7 +288,7 @@ const confirmDelete = async () => {
   if (!deletingListing.value) return
   
   confirming.value = true
-  const listingId = deletingListing.value.id
+  const listingId = deletingListing.value.itemId || deletingListing.value.id
   deletingIds.value.push(listingId)
   
   try {
@@ -302,7 +310,7 @@ const confirmDelete = async () => {
     }
     
     // Remove from local listings array
-    listings.value = listings.value.filter(l => l.id !== listingId)
+    listings.value = listings.value.filter(l => (l.itemId || l.id) !== listingId)
     
     successMessage.value = 'Listing deleted successfully!'
     setTimeout(() => {
@@ -321,7 +329,7 @@ const confirmDelete = async () => {
 
 const onListingSaved = (updatedListing) => {
   // Update the listing in the local array
-  const index = listings.value.findIndex(l => l.id === updatedListing.id)
+  const index = listings.value.findIndex(l => (l.itemId || l.id) === (updatedListing.itemId || updatedListing.id))
   if (index !== -1) {
     listings.value[index] = updatedListing
   }
@@ -340,6 +348,59 @@ const logout = () => {
   listings.value = null
   error.value = null
   navigateTo('/')
+}
+
+const loadImagesForListings = async () => {
+  if (!listings.value || listings.value.length === 0) return
+  
+  // Load images for each listing in parallel
+  const imagePromises = listings.value.map(async (listing) => {
+    try {
+      const listingId = listing.itemId || listing.id
+      if (!listingId) return
+      
+      console.log('Loading images for listing:', listingId)
+      
+      const response = await fetch(`${config.public.apiBaseUrl}/advertisement-images/${listingId}?user_id=${userToken.value}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        console.warn(`Failed to load images for listing ${listingId}:`, response.status)
+        return
+      }
+      
+      const imageData = await response.json()
+      console.log(`Images for listing ${listingId}:`, imageData)
+      
+      // Add images to the listing object
+      // Marktplaats API returns HAL format: _embedded["mp:advertisement-image"]
+      if (imageData._embedded && imageData._embedded["mp:advertisement-image"]) {
+        // Transform the API response to a simpler format for the frontend
+        listing.images = imageData._embedded["mp:advertisement-image"].map(img => ({
+          url: img.medium?.href || img.small?.href || img.large?.href, // Prefer medium, fallback to small or large
+          mediaId: img.mediaId,
+          status: img.status,
+          small: img.small?.href,
+          medium: img.medium?.href,
+          large: img.large?.href,
+          xlarge: img.xlarge?.href
+        }))
+      } else if (imageData.images && imageData.images.length > 0) {
+        // Fallback for other response formats
+        listing.images = imageData.images
+      }
+      
+    } catch (err) {
+      console.warn(`Error loading images for listing ${listing.itemId || listing.id}:`, err)
+    }
+  })
+  
+  // Wait for all image loading to complete
+  await Promise.all(imagePromises)
 }
 
 const formatPrice = (priceInCents) => {

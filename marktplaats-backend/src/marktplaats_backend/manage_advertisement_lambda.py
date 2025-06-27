@@ -34,7 +34,7 @@ def lambda_handler(event, context):
                 "headers": {
                     "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                     "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                    "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                    "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                 },
                 "body": json.dumps({"error": "advertisement_id path parameter is required"})
             }
@@ -45,12 +45,24 @@ def lambda_handler(event, context):
                 "headers": {
                     "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                     "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                    "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                    "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                 },
                 "body": json.dumps({"error": "user_id query parameter is required"})
             }
         
         print(f"Managing advertisement {advertisement_id} for user {user_id} via {http_method}")
+        
+        # Handle OPTIONS preflight request
+        if http_method == 'OPTIONS':
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
+                },
+                "body": ""
+            }
         
         try:
             if http_method == 'GET':
@@ -62,12 +74,12 @@ def lambda_handler(event, context):
                     "headers": {
                         "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                         "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                        "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                        "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                     },
                     "body": json.dumps(advertisement)
                 }
                 
-            elif http_method == 'PUT':
+            elif http_method == 'PATCH':
                 # Update advertisement
                 if not event.get('body'):
                     return {
@@ -75,7 +87,7 @@ def lambda_handler(event, context):
                         "headers": {
                             "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                             "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                            "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                            "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                         },
                         "body": json.dumps({"error": "Request body is required for updates"})
                     }
@@ -88,7 +100,7 @@ def lambda_handler(event, context):
                         "headers": {
                             "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                             "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                            "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                            "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                         },
                         "body": json.dumps({"error": "Invalid JSON in request body"})
                     }
@@ -104,9 +116,9 @@ def lambda_handler(event, context):
                     return {
                         "statusCode": 400,
                         "headers": {
-                            "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                            "Access-Control-Allow-Origin": "*",
                             "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                            "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                            "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                         },
                         "body": json.dumps({"error": "Title must be 80 characters or less"})
                     }
@@ -125,7 +137,7 @@ def lambda_handler(event, context):
                     "headers": {
                         "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                         "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                        "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                        "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                     },
                     "body": json.dumps(result)
                 }
@@ -139,7 +151,7 @@ def lambda_handler(event, context):
                     "headers": {
                         "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                         "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                        "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                        "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                     },
                     "body": json.dumps(result)
                 }
@@ -150,7 +162,7 @@ def lambda_handler(event, context):
                     "headers": {
                         "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                         "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                        "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                        "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                     },
                     "body": json.dumps({"error": f"Method {http_method} not allowed"})
                 }
@@ -164,7 +176,7 @@ def lambda_handler(event, context):
                 "headers": {
                     "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
                     "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                    "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS"
+                    "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                 },
                 "body": json.dumps({"error": str(e)})
             }

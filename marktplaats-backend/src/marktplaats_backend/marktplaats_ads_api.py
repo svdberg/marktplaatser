@@ -312,8 +312,28 @@ def list_user_advertisements(user_id, offset=None, limit=None):
     
     print(f"Listing advertisements for user {user_id} with params: {params}")
     
+    # First get the actual Marktplaats user ID
+    me_response = requests.get(
+        f"{MARKTPLAATS_API_BASE}/me",
+        headers=headers,
+        allow_redirects=False  # Don't follow redirects so we can get the Location header
+    )
+    
+    print(f"ME response status: {me_response.status_code}")
+    print(f"ME response headers: {dict(me_response.headers)}")
+    
+    # Extract Marktplaats user ID from the redirect location header
+    if me_response.status_code == 302 and 'location' in me_response.headers:
+        location = me_response.headers['location']
+        # Extract user ID from /v1/users/{userId}
+        marktplaats_user_id = location.split('/')[-1]
+        print(f"Found Marktplaats user ID: {marktplaats_user_id}")
+    else:
+        print(f"Unexpected ME response: {me_response.status_code}, {me_response.text}")
+        raise ValueError(f"Could not determine Marktplaats user ID. Status: {me_response.status_code}")
+    
     response = requests.get(
-        f"{MARKTPLAATS_API_BASE}/advertisements",
+        f"{MARKTPLAATS_API_BASE}/users/{marktplaats_user_id}/advertisements",
         headers=headers,
         params=params if params else None
     )
@@ -355,6 +375,7 @@ def get_user_advertisement(advertisement_id, user_id):
     
     print(f"Getting advertisement {advertisement_id} for user {user_id}")
     
+    # Use the standard advertisement endpoint (not user-specific)
     response = requests.get(
         f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
         headers=headers
@@ -369,14 +390,14 @@ def get_user_advertisement(advertisement_id, user_id):
 
 def update_user_advertisement(advertisement_id, user_id, title=None, description=None, price_model=None, attributes=None):
     """
-    Update an existing advertisement for a specific user.
+    Update an existing advertisement for a specific user using PATCH with JSON Patch operations.
     
     Args:
         advertisement_id (str/int): Advertisement ID
         user_id (str): User ID for token retrieval
         title (str): Optional new title
         description (str): Optional new description
-        price_model (dict): Optional new price model
+        price_model (dict): Optional new price model with askingPrice
         attributes (list): Optional new attributes
         
     Returns:
@@ -391,42 +412,140 @@ def update_user_advertisement(advertisement_id, user_id, title=None, description
     if not user_id:
         raise ValueError("User ID is required")
     
-    # Build update payload with only provided fields
-    payload = {}
-    if title is not None:
-        payload['title'] = title
-    if description is not None:
-        payload['description'] = description
-    if price_model is not None:
-        if not isinstance(price_model, dict) or 'modelType' not in price_model:
-            raise ValueError("Invalid price_model format")
-        payload['priceModel'] = price_model
-    if attributes is not None:
-        payload['attributes'] = attributes
+    # Get user-specific token
+    token = get_user_token(user_id)
     
-    if not payload:
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json-patch+json",
+        "Accept": "application/json"
+    }
+    
+    # Build JSON Patch operations
+    patch_operations = []
+    
+    if title is not None:
+        patch_operations.append({
+            "op": "replace",
+            "path": "/title",  
+            "value": title
+        })
+    
+    if description is not None:
+        patch_operations.append({
+            "op": "replace",
+            "path": "/description",
+            "value": description
+        })
+    
+    if price_model is not None and 'askingPrice' in price_model:
+        new_asking_price = price_model['askingPrice']
+        print(f"Updating asking price to {new_asking_price}")
+        
+        # Add operation to update asking price
+        patch_operations.append({
+            "op": "replace",
+            "path": "/priceModel/askingPrice",
+            "value": new_asking_price
+        })
+        
+        # Get current advertisement to check if we need to adjust minimalBid
+        print(f"Getting current advertisement to check minimalBid...")
+        current_ad_response = requests.get(
+            f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json"
+            }
+        )
+        
+        if current_ad_response.status_code == 200:
+            current_ad = current_ad_response.json()
+            current_price_model = current_ad.get('priceModel', {})
+            current_minimal_bid = current_price_model.get('minimalBid')
+            
+            print(f"Current price model: {current_price_model}")
+            
+            # Adjust minimalBid if it exists and is greater than new askingPrice
+            if current_minimal_bid is not None and current_minimal_bid > new_asking_price:
+                new_minimal_bid = new_asking_price - 1
+                print(f"Adjusting minimalBid from {current_minimal_bid} to {new_minimal_bid}")
+                
+                patch_operations.append({
+                    "op": "replace",
+                    "path": "/priceModel/minimalBid",
+                    "value": new_minimal_bid
+                })
+    
+    if attributes is not None:
+        patch_operations.append({
+            "op": "replace",
+            "path": "/attributes",
+            "value": attributes
+        })
+    
+    if not patch_operations:
         raise ValueError("At least one field must be provided for update")
+    
+    print(f"Updating advertisement {advertisement_id} for user {user_id}")
+    print(f"JSON Patch operations: {patch_operations}")
+    
+    # Debug: Print the actual JSON being sent
+    import json as json_module
+    json_payload = json_module.dumps(patch_operations, ensure_ascii=False)
+    print(f"JSON Patch payload being sent: {json_payload}")
+    print(f"JSON Patch payload length: {len(json_payload)}")
+    
+    response = requests.patch(
+        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+        headers=headers,
+        json=patch_operations
+    )
+    
+    print(f"Update advertisement response status: {response.status_code}")
+    print(f"Update advertisement response body: {response.text}")
+    
+    response.raise_for_status()
+    return response.json()
+
+
+def get_user_advertisement_images(advertisement_id, user_id):
+    """
+    Get images for a user's advertisement.
+    
+    Args:
+        advertisement_id (str/int): Advertisement ID
+        user_id (str): User ID for token retrieval
+        
+    Returns:
+        dict: Advertisement images response
+        
+    Raises:
+        requests.HTTPError: If API call fails
+        ValueError: If parameters are invalid
+    """
+    if not advertisement_id:
+        raise ValueError("Advertisement ID is required")
+    if not user_id:
+        raise ValueError("User ID is required")
     
     # Get user-specific token
     token = get_user_token(user_id)
     
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
         "Accept": "application/json"
     }
     
-    print(f"Updating advertisement {advertisement_id} for user {user_id}")
-    print(f"Update payload: {payload}")
+    print(f"Getting images for advertisement {advertisement_id} for user {user_id}")
     
-    response = requests.put(
-        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
-        headers=headers,
-        json=payload
+    response = requests.get(
+        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}/images",
+        headers=headers
     )
     
-    print(f"Update advertisement response status: {response.status_code}")
-    print(f"Update advertisement response body: {response.text}")
+    print(f"Get advertisement images response status: {response.status_code}")
+    print(f"Get advertisement images response body: {response.text}")
     
     response.raise_for_status()
     return response.json()
