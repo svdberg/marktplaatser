@@ -487,6 +487,11 @@ def update_user_advertisement(advertisement_id, user_id, title=None, description
     if not patch_operations:
         raise ValueError("At least one field must be provided for update")
     
+    # Validate title length before sending to API
+    for operation in patch_operations:
+        if operation.get("path") == "/title" and len(operation.get("value", "")) > 80:
+            raise ValueError(f"Title is too long ({len(operation['value'])} characters). Maximum is 80 characters.")
+    
     print(f"Updating advertisement {advertisement_id} for user {user_id}")
     print(f"JSON Patch operations: {patch_operations}")
     
@@ -504,6 +509,21 @@ def update_user_advertisement(advertisement_id, user_id, title=None, description
     
     print(f"Update advertisement response status: {response.status_code}")
     print(f"Update advertisement response body: {response.text}")
+    
+    # Handle Marktplaats API validation errors more gracefully
+    if response.status_code == 400:
+        try:
+            error_data = response.json()
+            if error_data.get("code") == "validation-failure":
+                details = error_data.get("details", [])
+                error_messages = []
+                for detail in details:
+                    field = detail.get("field", "unknown")
+                    message = detail.get("message", "validation error")
+                    error_messages.append(f"{field}: {message}")
+                raise ValueError("Marktplaats validation error: " + "; ".join(error_messages))
+        except (ValueError, KeyError):
+            pass  # Fall through to the original error handling
     
     response.raise_for_status()
     return response.json()

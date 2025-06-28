@@ -32,6 +32,11 @@
 
       <!-- Edit Form -->
       <form v-else @submit.prevent="saveListing" class="space-y-6">
+        <!-- General Error Message -->
+        <div v-if="errors.general" class="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p class="text-red-700">{{ errors.general }}</p>
+        </div>
+        
         <!-- Title -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -289,7 +294,19 @@ const saveListing = async () => {
     if (!response.ok) {
       const errorText = await response.text()
       console.error('Update error:', errorText)
-      throw new Error(`Failed to update listing: ${response.status}`)
+      
+      try {
+        const errorData = JSON.parse(errorText)
+        if (errorData.error && errorData.error.includes('validation error')) {
+          throw new Error(`Validation error: ${errorData.error}`)
+        } else if (errorData.error) {
+          throw new Error(errorData.error)
+        }
+      } catch (parseError) {
+        // If we can't parse the error, use a generic message
+      }
+      
+      throw new Error(`Failed to update listing (${response.status}). Please check your input and try again.`)
     }
     
     const data = await response.json()
@@ -323,6 +340,11 @@ const saveListing = async () => {
 
 // Watch form changes to clear errors
 watch(form, () => {
+  // Clear general error when user starts typing
+  if (errors.value.general) {
+    errors.value.general = null
+  }
+  
   if (Object.keys(errors.value).length > 0) {
     validateForm()
   }
