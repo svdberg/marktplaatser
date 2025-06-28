@@ -4,7 +4,7 @@ import os
 # Force AWS region to eu-west-1 at the very start
 os.environ['AWS_REGION'] = 'eu-west-1'
 
-from .marktplaats_ads_api import get_user_advertisement, update_user_advertisement, delete_user_advertisement
+from .marktplaats_ads_api import get_user_advertisement, update_user_advertisement, delete_user_advertisement, toggle_advertisement_reserved_status
 
 
 def lambda_handler(event, context):
@@ -110,6 +110,8 @@ def lambda_handler(event, context):
                 description = body.get('description')
                 price_model = body.get('priceModel')
                 attributes = body.get('attributes')
+                reserved = body.get('reserved')
+                asking_price = body.get('askingPrice')  # For unreserving
                 
                 # Validate title length if provided
                 if title is not None and len(title) > 80:
@@ -123,14 +125,56 @@ def lambda_handler(event, context):
                         "body": json.dumps({"error": "Title must be 80 characters or less"})
                     }
                 
-                result = update_user_advertisement(
-                    advertisement_id,
-                    user_id,
-                    title=title,
-                    description=description,
-                    price_model=price_model,
-                    attributes=attributes
-                )
+                # Handle reserved status separately if provided
+                if reserved is not None:
+                    if not isinstance(reserved, bool):
+                        return {
+                            "statusCode": 400,
+                            "headers": {
+                                "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                                "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
+                            },
+                            "body": json.dumps({"error": "Reserved status must be a boolean value"})
+                        }
+                    
+                    # Update reserved status first
+                    result = toggle_advertisement_reserved_status(advertisement_id, user_id, reserved, asking_price)
+                    
+                    # If only reserved status was updated, return the result
+                    if all(field is None for field in [title, description, price_model, attributes]):
+                        return {
+                            "statusCode": 200,
+                            "headers": {
+                                "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                                "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
+                            },
+                            "body": json.dumps(result)
+                        }
+                
+                # Update other fields if provided
+                if any(field is not None for field in [title, description, price_model, attributes]):
+                    result = update_user_advertisement(
+                        advertisement_id,
+                        user_id,
+                        title=title,
+                        description=description,
+                        price_model=price_model,
+                        attributes=attributes
+                    )
+                else:
+                    # If only reserved status was updated, we already handled it above
+                    # If no fields were provided, return an error
+                    return {
+                        "statusCode": 400,
+                        "headers": {
+                            "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                            "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                            "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
+                        },
+                        "body": json.dumps({"error": "At least one field must be provided for update"})
+                    }
                 
                 return {
                     "statusCode": 200,

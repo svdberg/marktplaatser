@@ -29,6 +29,14 @@
     @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
   }
   
+  .btn-warning {
+    @apply bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500;
+  }
+  
+  .btn-success {
+    @apply bg-green-600 text-white hover:bg-green-700 focus:ring-green-500;
+  }
+  
   .card {
     @apply bg-white rounded-lg shadow-md p-6;
   }

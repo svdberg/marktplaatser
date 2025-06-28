@@ -571,6 +571,236 @@ def get_user_advertisement_images(advertisement_id, user_id):
     return response.json()
 
 
+def toggle_advertisement_reserved_status(advertisement_id, user_id, reserved_status, asking_price=None):
+    """
+    Toggle the reserved status of an advertisement using JSON Patch.
+    
+    According to Marktplaats API docs: "if set to true, this will override 
+    the advertisement Price Model and set it to reserved."
+    
+    To unreserve, we need to provide a new asking price (like the Marktplaats website does).
+    
+    Args:
+        advertisement_id (str/int): Advertisement ID
+        user_id (str): User ID for token retrieval
+        reserved_status (bool): New reserved status (True for reserved, False for available)
+        asking_price (int): Required when unreserving (reserved_status=False). Price in cents.
+        
+    Returns:
+        dict: Update response
+        
+    Raises:
+        requests.HTTPError: If API call fails
+        ValueError: If parameters are invalid
+    """
+    if not advertisement_id:
+        raise ValueError("Advertisement ID is required")
+    if not user_id:
+        raise ValueError("User ID is required")
+    if not isinstance(reserved_status, bool):
+        raise ValueError("Reserved status must be a boolean")
+    
+    # When unreserving, asking price is required
+    if not reserved_status and not asking_price:
+        raise ValueError("Asking price is required when unreserving an advertisement")
+    
+    if asking_price and (not isinstance(asking_price, int) or asking_price <= 0):
+        raise ValueError("Asking price must be a positive integer (in cents)")
+    
+    # Get user-specific token
+    token = get_user_token(user_id)
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json-patch+json",
+        "Accept": "application/json"
+    }
+    
+    print(f"Updating reserved status for advertisement {advertisement_id} to {reserved_status}")
+    
+    # Get current advertisement data first to understand current state
+    current_response = requests.get(
+        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json"
+        }
+    )
+    
+    current_data = None
+    if current_response.status_code == 200:
+        current_data = current_response.json()
+        current_reserved = current_data.get('reserved', False)
+        current_price_model = current_data.get('priceModel', {})
+        
+        print(f"Current advertisement state:")
+        print(f"  - reserved: {current_reserved}")
+        print(f"  - priceModel: {current_price_model}")
+        
+        # Debug: Let's see what other price-related fields are available
+        print(f"  - All advertisement fields: {list(current_data.keys())}")
+        
+        # Look for any price-related fields outside the price model
+        for key, value in current_data.items():
+            if 'price' in key.lower() or 'bid' in key.lower() or 'amount' in key.lower():
+                print(f"  - Found price-related field {key}: {value}")
+        
+        # If we're trying to unreserve but it's already not reserved, no need to update
+        if not reserved_status and not current_reserved:
+            print("Advertisement is already not reserved, no update needed")
+            return current_data
+        
+        # If we're trying to reserve but it's already reserved, no need to update  
+        if reserved_status and current_reserved:
+            print("Advertisement is already reserved, no update needed")
+            return current_data
+    
+    # Build JSON Patch operations based on whether we're reserving or unreserving
+    if reserved_status:
+        # Reserving: simply set reserved to true (this will override price model)
+        print("Reserving advertisement by setting reserved=true...")
+        patch_operations = [{
+            "op": "replace",
+            "path": "/reserved",
+            "value": True
+        }]
+    else:
+        # Unreserving: need to restore the original price model and remove reserved field
+        print("Unreserving advertisement by restoring price model...")
+        
+        # To unreserve, we need to:
+        # 1. Remove the reserved field  
+        # 2. Restore a complete price model with the user-provided asking price
+        
+        print(f"Unreserving advertisement with new asking price: {asking_price} cents")
+        
+        # Create a complete fixed price model with the provided asking price
+        restore_price_model = {
+            "modelType": "fixed",
+            "askingPrice": asking_price
+        }
+        
+        print(f"Restoring price model: {restore_price_model}")
+        
+        # Use two operations: set proper price model and remove reserved field
+        patch_operations = [
+            {
+                "op": "replace",
+                "path": "/priceModel/modelType",
+                "value": restore_price_model["modelType"]
+            },
+            {
+                "op": "add",
+                "path": "/priceModel/askingPrice",
+                "value": restore_price_model["askingPrice"]
+            }
+        ]
+    
+    print(f"JSON Patch operations: {patch_operations}")
+    
+    response = requests.patch(
+        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+        headers=headers,
+        json=patch_operations
+    )
+    
+    print(f"Toggle reserved status response status: {response.status_code}")
+    print(f"Toggle reserved status response body: {response.text}")
+    
+    # Handle Marktplaats API validation errors more gracefully
+    if response.status_code == 400:
+        try:
+            error_data = response.json()
+            if error_data.get("code") == "validation-failure":
+                details = error_data.get("details", [])
+                error_messages = []
+                for detail in details:
+                    field = detail.get("field", "unknown")
+                    message = detail.get("message", "validation error")
+                    error_messages.append(f"{field}: {message}")
+                print(f"Marktplaats validation error: {'; '.join(error_messages)}")
+                
+                # If unreserving failed, try simpler approaches
+                if not reserved_status:
+                    print("Complex unreserve operation failed, trying simpler approaches...")
+                    
+                    # Try 1: Just remove the reserved field
+                    print("Trying to remove reserved field only...")
+                    fallback_operations = [{
+                        "op": "remove",
+                        "path": "/reserved"
+                    }]
+                    
+                    fallback_response = requests.patch(
+                        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+                        headers=headers,
+                        json=fallback_operations
+                    )
+                    
+                    print(f"Fallback 1 response status: {fallback_response.status_code}")
+                    
+                    if fallback_response.ok:
+                        response = fallback_response
+                    else:
+                        # Try 2: Just set reserved to false
+                        print("Trying to set reserved to false...")
+                        fallback_operations_2 = [{
+                            "op": "replace",
+                            "path": "/reserved", 
+                            "value": False
+                        }]
+                        
+                        fallback_response_2 = requests.patch(
+                            f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+                            headers=headers,
+                            json=fallback_operations_2
+                        )
+                        
+                        print(f"Fallback 2 response status: {fallback_response_2.status_code}")
+                        
+                        if fallback_response_2.ok:
+                            response = fallback_response_2
+                        else:
+                            raise ValueError("Cannot unreserve advertisement. Marktplaats API error: " + "; ".join(error_messages))
+                else:
+                    raise ValueError("Marktplaats validation error: " + "; ".join(error_messages))
+        except (ValueError, KeyError):
+            pass  # Fall through to the original error handling
+    
+    response.raise_for_status()
+    
+    # Get the updated advertisement to verify the change actually took effect
+    print(f"Verifying reserved status change...")
+    verify_response = requests.get(
+        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json"
+        }
+    )
+    
+    if verify_response.status_code == 200:
+        verify_data = verify_response.json()
+        actual_reserved = verify_data.get('reserved', False)
+        print(f"Verification: Expected reserved={reserved_status}, Actual reserved={actual_reserved}")
+        
+        if actual_reserved != reserved_status:
+            print(f"WARNING: Reserved status did not change as expected!")
+            if not reserved_status:
+                print("Failed to unreserve advertisement. This might be due to:")
+                print("1. Incomplete price model restoration")
+                print("2. API timing issues")
+                print("3. Missing required price model fields")
+                verify_data['warning'] = f"Could not unreserve advertisement. Expected reserved={reserved_status}, but got reserved={actual_reserved}. The price model restoration may have failed."
+            else:
+                verify_data['warning'] = f"Could not reserve advertisement. API returned reserved={actual_reserved} instead of {reserved_status}."
+            return verify_data
+        else:
+            print(f"✅ Reserved status successfully updated to {actual_reserved}")
+    
+    return response.json()
+
+
 def delete_user_advertisement(advertisement_id, user_id):
     """
     Delete an advertisement for a specific user.

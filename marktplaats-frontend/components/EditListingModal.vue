@@ -118,6 +118,32 @@
           <p class="text-gray-500 text-sm mt-1">Attributes are automatically set and cannot be modified</p>
         </div>
 
+        <!-- Reserved Status -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Listing Status
+          </label>
+          <div class="flex items-center space-x-3">
+            <label class="flex items-center">
+              <input
+                v-model="form.reserved"
+                type="checkbox"
+                class="rounded border-gray-300 text-primary focus:ring-primary"
+                :disabled="form.reserved"
+              >
+              <span class="ml-2 text-sm text-gray-700" :class="{ 'opacity-50': form.reserved }">
+                🔒 Mark as reserved (during negotiations)
+              </span>
+            </label>
+          </div>
+          <p class="text-gray-500 text-sm mt-1">
+            {{ form.reserved 
+              ? '⚠️ Reserved status is permanent and cannot be changed back to available' 
+              : '⚠️ WARNING: Marking as reserved appears to be PERMANENT. You will not be able to change it back.' 
+            }}
+          </p>
+        </div>
+
         <!-- Action Buttons -->
         <div class="flex space-x-3 pt-4 border-t">
           <button
@@ -159,7 +185,8 @@ const form = ref({
   description: '',
   price: 0,
   categoryName: '',
-  attributes: []
+  attributes: [],
+  reserved: false
 })
 
 const loadingDetails = ref(false)
@@ -223,7 +250,8 @@ const loadListingDetails = async () => {
       description: data.description || '',
       price: data.priceModel?.askingPrice ? (data.priceModel.askingPrice / 100) : 0,
       categoryName: data.category?.name || 'Unknown Category',
-      attributes: data.attributes || []
+      attributes: data.attributes || [],
+      reserved: data.reserved || false
     }
     
   } catch (err) {
@@ -276,7 +304,8 @@ const saveListing = async () => {
       priceModel: {
         modelType: 'fixed',
         askingPrice: Math.round(form.value.price * 100) // Convert euros to cents
-      }
+      },
+      reserved: form.value.reserved
     }
     
     console.log('Update data:', updateData)
@@ -324,7 +353,8 @@ const saveListing = async () => {
       priceModel: {
         modelType: 'fixed',
         askingPrice: Math.round(form.value.price * 100)
-      }
+      },
+      reserved: form.value.reserved
     }
     
     emit('saved', updatedListing)

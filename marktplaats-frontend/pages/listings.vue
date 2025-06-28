@@ -128,25 +128,52 @@
                 </span>
               </div>
               
-              <div class="text-xs text-gray-400">
-                ID: {{ listing.itemId || listing.id }}
+              <!-- Reserved Status Indicator -->
+              <div class="flex items-center justify-between">
+                <div class="text-xs text-gray-400">
+                  ID: {{ listing.itemId || listing.id }}
+                </div>
+                <div v-if="listing.reserved" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  🔒 Reserved
+                </div>
+                <div v-else class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  ✅ Available
+                </div>
               </div>
             </div>
 
             <!-- Action Buttons -->
-            <div class="mt-4 flex space-x-2">
+            <div class="mt-4 space-y-2">
+              <!-- Main Action Buttons -->
+              <div class="flex space-x-2">
+                <button
+                  @click="editListing(listing)"
+                  class="btn btn-secondary flex-1"
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  @click="deleteListing(listing)"
+                  class="btn btn-danger flex-1"
+                  :disabled="deletingIds.includes(listing.itemId || listing.id)"
+                >
+                  {{ deletingIds.includes(listing.itemId || listing.id) ? '⏳' : '🗑️' }} Delete
+                </button>
+              </div>
+              
+              <!-- Reserved Status Toggle -->
               <button
-                @click="editListing(listing)"
-                class="btn btn-secondary flex-1"
+                @click="toggleReservedStatus(listing)"
+                :class="[
+                  'btn w-full text-sm',
+                  listing.reserved ? 'btn-warning' : 'btn-success'
+                ]"
+                :disabled="togglingReservedIds.includes(listing.itemId || listing.id)"
               >
-                ✏️ Edit
-              </button>
-              <button
-                @click="deleteListing(listing)"
-                class="btn btn-danger flex-1"
-                :disabled="deletingIds.includes(listing.itemId || listing.id)"
-              >
-                {{ deletingIds.includes(listing.itemId || listing.id) ? '⏳' : '🗑️' }} Delete
+                {{ togglingReservedIds.includes(listing.itemId || listing.id) 
+                  ? '⏳ Updating...' 
+                  : (listing.reserved ? 'Unreserve' : 'Mark Reserved') 
+                }}
               </button>
             </div>
           </div>
@@ -192,6 +219,69 @@
       </div>
     </div>
 
+    <!-- Reserve Status Confirmation Modal -->
+    <div
+      v-if="reserveConfirmListing"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    >
+      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+          {{ reserveConfirmListing.reserved ? 'Make Available' : 'Mark as Reserved' }}
+        </h3>
+        <p class="text-gray-600 mb-2">
+          <strong>"{{ reserveConfirmListing.title }}"</strong>
+        </p>
+        <p class="text-gray-600 mb-4">
+          {{ reserveConfirmListing.reserved 
+            ? 'To unreserve this advertisement, you need to set a new asking price (the original price is lost when an ad is reserved).' 
+            : '⚠️ IMPORTANT: Marking as reserved will hide this listing from new buyers during negotiations. You can unreserve it later by setting a new price.' 
+          }}
+        </p>
+        
+        <!-- Price input for unreserving -->
+        <div v-if="reserveConfirmListing.reserved" class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            New Asking Price (€) *
+          </label>
+          <input
+            v-model.number="unreservePrice"
+            type="number"
+            min="0.01"
+            step="0.01"
+            placeholder="Enter new asking price"
+            class="w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
+            required
+          >
+          <p class="text-gray-500 text-sm mt-1">
+            This will be the new asking price for your advertisement
+          </p>
+        </div>
+        <div class="flex space-x-3">
+          <button
+            @click="reserveConfirmListing = null"
+            class="btn btn-secondary flex-1"
+          >
+            Cancel
+          </button>
+          <button
+            @click="confirmToggleReserved"
+            :class="[
+              'btn flex-1',
+              reserveConfirmListing.reserved ? 'btn-success' : 'btn-warning'
+            ]"
+            :disabled="togglingReservedIds.includes(reserveConfirmListing.itemId || reserveConfirmListing.id) || 
+                      (reserveConfirmListing.reserved && (!unreservePrice || unreservePrice <= 0))"
+                      
+          >
+            {{ togglingReservedIds.includes(reserveConfirmListing.itemId || reserveConfirmListing.id)
+              ? '⏳ Updating...' 
+              : (reserveConfirmListing.reserved ? '🔓 Make Available' : '🔒 Mark Reserved') 
+            }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Success Toast -->
     <div
       v-if="successMessage"
@@ -215,6 +305,9 @@ const deletingListing = ref(null)
 const deletingIds = ref([])
 const confirming = ref(false)
 const successMessage = ref(null)
+const togglingReservedIds = ref([])
+const reserveConfirmListing = ref(null)
+const unreservePrice = ref('')
 
 // Check for stored user ID on mount
 onMounted(() => {
@@ -324,6 +417,87 @@ const confirmDelete = async () => {
     confirming.value = false
     deletingListing.value = null
     deletingIds.value = deletingIds.value.filter(id => id !== listingId)
+  }
+}
+
+const toggleReservedStatus = (listing) => {
+  reserveConfirmListing.value = listing
+}
+
+const confirmToggleReserved = async () => {
+  if (!reserveConfirmListing.value) return
+  
+  const listing = reserveConfirmListing.value
+  const listingId = listing.itemId || listing.id
+  const newReservedStatus = !listing.reserved
+  
+  togglingReservedIds.value.push(listingId)
+  
+  try {
+    console.log(`Toggling reserved status for listing ${listingId} to ${newReservedStatus}`)
+    
+    // Prepare the request body
+    const requestBody = {
+      reserved: newReservedStatus
+    }
+    
+    // If unreserving, include the asking price in cents
+    if (!newReservedStatus && unreservePrice.value) {
+      requestBody.askingPrice = Math.round(unreservePrice.value * 100) // Convert euros to cents
+    }
+    
+    const response = await fetch(`${config.public.apiBaseUrl}/manage-advertisement/${listingId}?user_id=${userToken.value}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    })
+    
+    console.log('Toggle reserved status response status:', response.status)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Toggle reserved status error:', errorText)
+      throw new Error(`Failed to update reserved status: ${response.status}`)
+    }
+    
+    const result = await response.json()
+    console.log('Toggle reserved status response:', result)
+    
+    // Check if there's a warning (API didn't actually update the field)
+    if (result.warning) {
+      console.warn('API Warning:', result.warning)
+      if (result.warning.includes('permanent')) {
+        error.value = `⚠️ Reserved Status is Permanent: Once an advertisement is marked as reserved, the Marktplaats API does not allow it to be changed back to available. This is a permanent status change in the Marktplaats system.`
+      } else {
+        error.value = `Warning: ${result.warning}`
+      }
+      return
+    }
+    
+    // Update the local listing with the actual status from the API response
+    const actualReservedStatus = result.reserved !== undefined ? result.reserved : newReservedStatus
+    listing.reserved = actualReservedStatus
+    
+    // Show warning if the status didn't change as expected
+    if (actualReservedStatus !== newReservedStatus) {
+      error.value = `The reserved status may not have been updated. Expected: ${newReservedStatus}, but API returned: ${actualReservedStatus}`
+      return
+    }
+    
+    successMessage.value = `Listing ${actualReservedStatus ? 'reserved' : 'made available'} successfully!`
+    setTimeout(() => {
+      successMessage.value = null
+    }, 3000)
+    
+  } catch (err) {
+    console.error('Toggle reserved status error:', err)
+    error.value = err.message
+  } finally {
+    togglingReservedIds.value = togglingReservedIds.value.filter(id => id !== listingId)
+    reserveConfirmListing.value = null
+    unreservePrice.value = '' // Clear the price input
   }
 }
 
