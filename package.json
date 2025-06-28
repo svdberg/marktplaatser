@@ -1,0 +1,48 @@
+{
+  "name": "marktplaats-ai-assistant",
+  "version": "1.0.0",
+  "description": "AI-powered Marktplaats listing generator with image analysis and smart pricing",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "install:backend": "cd marktplaats-backend && pip install -r requirements.txt && pip install -e \".[dev]\"",
+    "install:frontend": "cd marktplaats-frontend && npm install",
+    "deploy": "./deploy.sh",
+    "deploy:backend": "cd marktplaats-backend && ./deploy.sh",
+    "deploy:frontend": "cd marktplaats-frontend && ./deploy.sh",
+    "dev:frontend": "cd marktplaats-frontend && npm run dev",
+    "test:backend": "cd marktplaats-backend && python -m pytest tests/ -v",
+    "lint:backend": "cd marktplaats-backend && flake8 src/ tests/ && black --check src/ tests/ && mypy src/",
+    "lint:frontend": "cd marktplaats-frontend && npm run lint",
+    "build:frontend": "cd marktplaats-frontend && npm run generate",
+    "clean": "rm -rf marktplaats-backend/.serverless marktplaats-frontend/.nuxt marktplaats-frontend/.output",
+    "logs:generate": "cd marktplaats-backend && serverless logs -f generateListing -t",
+    "logs:manage": "cd marktplaats-backend && serverless logs -f manageAdvertisement -t"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/marktplaats-ai-assistant.git"
+  },
+  "keywords": [
+    "marktplaats",
+    "ai",
+    "image-analysis",
+    "aws",
+    "lambda",
+    "claude",
+    "vue",
+    "nuxt",
+    "serverless"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/your-username/marktplaats-ai-assistant/issues"
+  },
+  "homepage": "https://github.com/your-username/marktplaats-ai-assistant#readme",
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}
