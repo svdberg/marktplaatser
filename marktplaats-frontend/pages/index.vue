@@ -328,12 +328,25 @@ const generateListing = async () => {
   if (!selectedFile.value) return
   
   loading.value = true
-  loadingMessage.value = 'Analyzing image with AI...'
+  loadingMessage.value = 'Compressing and analyzing image...'
   error.value = null
   
   try {
-    // Convert file to base64
-    const base64 = await fileToBase64(selectedFile.value)
+    // Resize and compress image for better API performance
+    loadingMessage.value = 'Compressing image for mobile optimization...'
+    const base64 = await resizeAndCompressImage(selectedFile.value, 1024, 1024, 0.8)
+    
+    loadingMessage.value = 'Analyzing image with AI...'
+    
+    // Log compression results for debugging
+    const originalSize = selectedFile.value.size
+    const compressedSize = Math.round((base64.length * 3) / 4) // Approximate compressed size
+    console.log(`Image compression: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB`)
+    
+    // Warn if still too large
+    if (compressedSize > 5 * 1024 * 1024) { // 5MB limit
+      console.warn('Compressed image is still quite large:', compressedSize / 1024 / 1024, 'MB')
+    }
     
     // Call generate listing API
     console.log('Calling API:', `${config.public.apiBaseUrl}/generate-listing`)
@@ -385,7 +398,8 @@ const createAdvertisement = async () => {
   error.value = null
   
   try {
-    const base64 = await fileToBase64(selectedFile.value)
+    // Use the same compressed image for advertisement creation
+    const base64 = await resizeAndCompressImage(selectedFile.value, 1024, 1024, 0.8)
     
     const response = await fetch(`${config.public.apiBaseUrl}/create-advertisement`, {
       method: 'POST',
@@ -455,7 +469,54 @@ const createAnother = () => {
   }
 }
 
-// Utility function
+// Utility function to resize and compress image
+const resizeAndCompressImage = (file, maxWidth = 1024, maxHeight = 1024, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = new Image()
+    
+    img.onload = () => {
+      // Calculate new dimensions while maintaining aspect ratio
+      let { width, height } = img
+      
+      if (width > height) {
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width
+          width = maxWidth
+        }
+      } else {
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height
+          height = maxHeight
+        }
+      }
+      
+      // Set canvas dimensions
+      canvas.width = width
+      canvas.height = height
+      
+      // Draw and compress image
+      ctx.drawImage(img, 0, 0, width, height)
+      
+      // Convert to base64 with compression
+      const base64 = canvas.toDataURL('image/jpeg', quality)
+      resolve(base64)
+    }
+    
+    img.onerror = reject
+    
+    // Load the image
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      img.src = e.target.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+// Legacy utility function (kept for backward compatibility)
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
