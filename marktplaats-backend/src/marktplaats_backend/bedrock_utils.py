@@ -54,9 +54,20 @@ Genereer:
 2. Een Nederlandse productbeschrijving van 2–4 zinnen
 3. De juiste categorie (kies EXACT uit de lijst hierboven)
 4. Relevante attributen als key-value paren (zoals merk, staat, leeftijdscategorie, materiaal, enz.)
+5. Een realistische prijs schatting voor de Nederlandse tweedehands markt (in hele euros)
 
-Geef het resultaat terug als JSON met de sleutels: title, description, category, attributes.
+Voor de prijsschatting:
+- Baseer je op je kennis van de Nederlandse tweedehands markt
+- Ga uit van tweedehands goederen in goede staat (tenzij de staat duidelijk anders is)
+- Geef de prijs in euros als geheel getal
+- Geef ook een prijsrange (minimum en maximum) 
+- Geef een vertrouwensniveau (hoog/gemiddeld/laag) voor je schatting
+
+Geef het resultaat terug als JSON met de sleutels: title, description, category, attributes, estimatedPrice, priceRange, priceConfidence.
 De category moet EXACT overeenkomen met één van de opgegeven categorieën.
+estimatedPrice is een geheel getal in euros.
+priceRange is een object met "min" en "max" als gehele getallen in euros.
+priceConfidence is een van: "hoog", "gemiddeld", "laag".
 """
     }
     ]
@@ -175,6 +186,7 @@ Genereer:
 2. Een Nederlandse productbeschrijving van 2-4 zinnen die details bevat die je in de afbeelding ziet
 3. De juiste categorie (kies EXACT uit de lijst hierboven)
 4. Relevante attributen als key-value paren (zoals merk, staat, leeftijdscategorie, materiaal, kleur, enz.)
+5. Een realistische prijs schatting voor de Nederlandse tweedehands markt (in hele euros)
 
 Belangrijke instructies:
 - Baseer je titel en beschrijving op wat je daadwerkelijk in de afbeelding ziet
@@ -182,7 +194,17 @@ Belangrijke instructies:
 - Voor de staat: gebruik "Nieuw", "Als nieuw", "Gebruikt" of "Redelijk"
 - De category moet EXACT overeenkomen met één van de opgegeven categorieën
 
-Geef het resultaat terug als JSON met de sleutels: title, description, category, attributes."""
+Voor de prijsschatting:
+- Baseer je op je kennis van de Nederlandse tweedehands markt en wat je in de afbeelding ziet
+- Beoordeel de staat van het product op basis van de afbeelding
+- Geef de prijs in euros als geheel getal
+- Geef ook een prijsrange (minimum en maximum) 
+- Geef een vertrouwensniveau (hoog/gemiddeld/laag) voor je schatting
+
+Geef het resultaat terug als JSON met de sleutels: title, description, category, attributes, estimatedPrice, priceRange, priceConfidence.
+estimatedPrice is een geheel getal in euros.
+priceRange is een object met "min" en "max" als gehele getallen in euros.
+priceConfidence is een van: "hoog", "gemiddeld", "laag"."""
         }
     ]
 

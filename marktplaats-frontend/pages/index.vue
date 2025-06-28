@@ -141,6 +141,44 @@
               @category-changed="onCategoryChanged"
             />
 
+            <!-- AI Price Estimation -->
+            <div v-if="generatedListing.estimatedPrice" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 class="text-sm font-medium text-blue-800 mb-2">🤖 AI Price Suggestion</h3>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-blue-700">Estimated Price:</span>
+                  <span class="text-lg font-bold text-blue-900">€{{ generatedListing.estimatedPrice }}</span>
+                </div>
+                <div v-if="generatedListing.priceRange" class="flex items-center justify-between">
+                  <span class="text-sm text-blue-700">Price Range:</span>
+                  <span class="text-sm text-blue-800">€{{ generatedListing.priceRange.min }} - €{{ generatedListing.priceRange.max }}</span>
+                </div>
+                <div v-if="generatedListing.priceConfidence" class="flex items-center justify-between">
+                  <span class="text-sm text-blue-700">Confidence:</span>
+                  <span 
+                    :class="{
+                      'text-green-600': generatedListing.priceConfidence === 'hoog',
+                      'text-yellow-600': generatedListing.priceConfidence === 'gemiddeld', 
+                      'text-red-600': generatedListing.priceConfidence === 'laag'
+                    }"
+                    class="text-sm font-medium"
+                  >
+                    {{ 
+                      generatedListing.priceConfidence === 'hoog' ? '🟢 High' :
+                      generatedListing.priceConfidence === 'gemiddeld' ? '🟡 Medium' :
+                      '🔴 Low'
+                    }}
+                  </span>
+                </div>
+                <button
+                  @click="useAIPrice"
+                  class="w-full mt-2 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                >
+                  Use AI Suggested Price
+                </button>
+              </div>
+            </div>
+
             <div>
               <label class="block text-sm font-medium text-gray-700">Price (€)</label>
               <input
@@ -290,12 +328,25 @@ const generateListing = async () => {
   if (!selectedFile.value) return
   
   loading.value = true
-  loadingMessage.value = 'Analyzing image with AI...'
+  loadingMessage.value = 'Compressing and analyzing image...'
   error.value = null
   
   try {
-    // Convert file to base64
-    const base64 = await fileToBase64(selectedFile.value)
+    // Resize and compress image for better API performance
+    loadingMessage.value = 'Compressing image for mobile optimization...'
+    const base64 = await resizeAndCompressImage(selectedFile.value, 1024, 1024, 0.8)
+    
+    loadingMessage.value = 'Analyzing image with AI...'
+    
+    // Log compression results for debugging
+    const originalSize = selectedFile.value.size
+    const compressedSize = Math.round((base64.length * 3) / 4) // Approximate compressed size
+    console.log(`Image compression: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB`)
+    
+    // Warn if still too large
+    if (compressedSize > 5 * 1024 * 1024) { // 5MB limit
+      console.warn('Compressed image is still quite large:', compressedSize / 1024 / 1024, 'MB')
+    }
     
     // Call generate listing API
     console.log('Calling API:', `${config.public.apiBaseUrl}/generate-listing`)
@@ -327,6 +378,11 @@ const generateListing = async () => {
     
     generatedListing.value = data
     
+    // Auto-fill the estimated price if available
+    if (data.estimatedPrice) {
+      price.value = data.estimatedPrice
+    }
+    
   } catch (err) {
     error.value = `Failed to generate listing: ${err.message}`
   } finally {
@@ -342,7 +398,8 @@ const createAdvertisement = async () => {
   error.value = null
   
   try {
-    const base64 = await fileToBase64(selectedFile.value)
+    // Use the same compressed image for advertisement creation
+    const base64 = await resizeAndCompressImage(selectedFile.value, 1024, 1024, 0.8)
     
     const response = await fetch(`${config.public.apiBaseUrl}/create-advertisement`, {
       method: 'POST',
@@ -389,6 +446,12 @@ const onCategoryChanged = (newCategoryId) => {
   // Category override is automatically updated via v-model
 }
 
+const useAIPrice = () => {
+  if (generatedListing.value?.estimatedPrice) {
+    price.value = generatedListing.value.estimatedPrice
+  }
+}
+
 const createAnother = () => {
   // Reset form to create another listing
   selectedImage.value = null
@@ -406,7 +469,54 @@ const createAnother = () => {
   }
 }
 
-// Utility function
+// Utility function to resize and compress image
+const resizeAndCompressImage = (file, maxWidth = 1024, maxHeight = 1024, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = new Image()
+    
+    img.onload = () => {
+      // Calculate new dimensions while maintaining aspect ratio
+      let { width, height } = img
+      
+      if (width > height) {
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width
+          width = maxWidth
+        }
+      } else {
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height
+          height = maxHeight
+        }
+      }
+      
+      // Set canvas dimensions
+      canvas.width = width
+      canvas.height = height
+      
+      // Draw and compress image
+      ctx.drawImage(img, 0, 0, width, height)
+      
+      // Convert to base64 with compression
+      const base64 = canvas.toDataURL('image/jpeg', quality)
+      resolve(base64)
+    }
+    
+    img.onerror = reject
+    
+    // Load the image
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      img.src = e.target.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+// Legacy utility function (kept for backward compatibility)
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

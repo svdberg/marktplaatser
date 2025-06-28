@@ -46,6 +46,8 @@ provider:
 functions:
   generateListing:
     handler: src/marktplaats_backend/generate_listing_lambda.lambda_handler
+    timeout: 60
+    memorySize: 1024
     events:
       - http:
           path: generate-listing
