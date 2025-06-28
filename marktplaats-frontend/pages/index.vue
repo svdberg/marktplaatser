@@ -141,6 +141,44 @@
               @category-changed="onCategoryChanged"
             />
 
+            <!-- AI Price Estimation -->
+            <div v-if="generatedListing.estimatedPrice" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 class="text-sm font-medium text-blue-800 mb-2">🤖 AI Price Suggestion</h3>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-blue-700">Estimated Price:</span>
+                  <span class="text-lg font-bold text-blue-900">€{{ generatedListing.estimatedPrice }}</span>
+                </div>
+                <div v-if="generatedListing.priceRange" class="flex items-center justify-between">
+                  <span class="text-sm text-blue-700">Price Range:</span>
+                  <span class="text-sm text-blue-800">€{{ generatedListing.priceRange.min }} - €{{ generatedListing.priceRange.max }}</span>
+                </div>
+                <div v-if="generatedListing.priceConfidence" class="flex items-center justify-between">
+                  <span class="text-sm text-blue-700">Confidence:</span>
+                  <span 
+                    :class="{
+                      'text-green-600': generatedListing.priceConfidence === 'hoog',
+                      'text-yellow-600': generatedListing.priceConfidence === 'gemiddeld', 
+                      'text-red-600': generatedListing.priceConfidence === 'laag'
+                    }"
+                    class="text-sm font-medium"
+                  >
+                    {{ 
+                      generatedListing.priceConfidence === 'hoog' ? '🟢 High' :
+                      generatedListing.priceConfidence === 'gemiddeld' ? '🟡 Medium' :
+                      '🔴 Low'
+                    }}
+                  </span>
+                </div>
+                <button
+                  @click="useAIPrice"
+                  class="w-full mt-2 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                >
+                  Use AI Suggested Price
+                </button>
+              </div>
+            </div>
+
             <div>
               <label class="block text-sm font-medium text-gray-700">Price (€)</label>
               <input
@@ -327,6 +365,11 @@ const generateListing = async () => {
     
     generatedListing.value = data
     
+    // Auto-fill the estimated price if available
+    if (data.estimatedPrice) {
+      price.value = data.estimatedPrice
+    }
+    
   } catch (err) {
     error.value = `Failed to generate listing: ${err.message}`
   } finally {
@@ -387,6 +430,12 @@ const createAdvertisement = async () => {
 const onCategoryChanged = (newCategoryId) => {
   console.log('Category changed to:', newCategoryId)
   // Category override is automatically updated via v-model
+}
+
+const useAIPrice = () => {
+  if (generatedListing.value?.estimatedPrice) {
+    price.value = generatedListing.value.estimatedPrice
+  }
 }
 
 const createAnother = () => {

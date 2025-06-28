@@ -73,6 +73,27 @@ def lambda_handler(event, context):
             # On any other error, continue without attributes
             mapped_attributes = []
 
+        # Validate and sanitize price estimation
+        estimated_price = listing_data.get("estimatedPrice")
+        price_range = listing_data.get("priceRange")
+        price_confidence = listing_data.get("priceConfidence")
+        
+        # Basic price validation - ensure reasonable bounds
+        if estimated_price is not None:
+            # Clamp price between €1 and €50,000
+            estimated_price = max(1, min(50000, int(estimated_price)))
+            
+        if price_range is not None:
+            # Validate price range bounds
+            if isinstance(price_range, dict) and "min" in price_range and "max" in price_range:
+                price_range["min"] = max(1, min(50000, int(price_range["min"])))
+                price_range["max"] = max(1, min(50000, int(price_range["max"])))
+                # Ensure min <= max
+                if price_range["min"] > price_range["max"]:
+                    price_range["min"], price_range["max"] = price_range["max"], price_range["min"]
+            else:
+                price_range = None
+
         # Build listing result
         listing = {
             "title": listing_data["title"],
@@ -80,6 +101,9 @@ def lambda_handler(event, context):
             "categoryId": category_match["categoryId"],
             "categoryName": category_match["match"],
             "attributes": mapped_attributes,
+            "estimatedPrice": estimated_price,
+            "priceRange": price_range,
+            "priceConfidence": price_confidence
         }
 
         return {
