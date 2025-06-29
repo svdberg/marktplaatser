@@ -1,6 +1,8 @@
 import json
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
+import boto3
+from botocore.exceptions import ClientError
 
 # Force AWS region to eu-west-1 at the very start
 os.environ['AWS_REGION'] = 'eu-west-1'
@@ -10,6 +12,55 @@ from .draft_storage import (
     update_draft, delete_draft, get_draft_count_by_user,
     validate_draft_for_publishing
 )
+
+# Initialize S3 client
+s3 = boto3.client('s3', region_name='eu-west-1')
+
+
+def refresh_presigned_urls(draft_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert old presigned URLs to public URLs if needed.
+    
+    Args:
+        draft_data: Draft data dictionary
+        
+    Returns:
+        Draft data with public URLs
+    """
+    if not draft_data.get('images'):
+        return draft_data
+    
+    s3_bucket = os.environ.get('S3_BUCKET', 'marktplaatser-images')
+    refreshed_images = []
+    
+    for image_url in draft_data['images']:
+        try:
+            # Convert presigned URLs to public URLs
+            if 'amazonaws.com' in image_url and 'drafts/' in image_url:
+                # Extract the key from the URL
+                key_start = image_url.find('drafts/')
+                key_end = image_url.find('?') if '?' in image_url else len(image_url)
+                s3_key = image_url[key_start:key_end] if key_end > key_start else None
+                
+                if s3_key:
+                    # Generate public URL
+                    public_url = f"https://{s3_bucket}.s3.amazonaws.com/{s3_key}"
+                    refreshed_images.append(public_url)
+                else:
+                    # Keep original if we can't parse it
+                    refreshed_images.append(image_url)
+            else:
+                # Keep non-S3 URLs as-is
+                refreshed_images.append(image_url)
+                
+        except Exception as e:
+            print(f"Error converting URL for {image_url}: {str(e)}")
+            # Keep original URL if conversion fails
+            refreshed_images.append(image_url)
+    
+    # Update the draft data with public URLs
+    draft_data['images'] = refreshed_images
+    return draft_data
 
 
 def lambda_handler(event, context):
@@ -33,6 +84,14 @@ def lambda_handler(event, context):
         query_params = event.get('queryStringParameters') or {}
         path = event.get('path', '')
         
+        # Handle OPTIONS preflight request first (before validation)
+        if http_method == 'OPTIONS':
+            return {
+                "statusCode": 200,
+                "headers": get_cors_headers(),
+                "body": ""
+            }
+        
         draft_id = path_params.get('id')
         user_id = query_params.get('user_id')
         
@@ -48,14 +107,6 @@ def lambda_handler(event, context):
             }
         
         print(f"Managing drafts for user {user_id} via {http_method} {event.get('path', '')}")
-        
-        # Handle OPTIONS preflight request
-        if http_method == 'OPTIONS':
-            return {
-                "statusCode": 200,
-                "headers": get_cors_headers(),
-                "body": ""
-            }
         
         try:
             if http_method == 'GET' and not draft_id:
@@ -116,8 +167,13 @@ def handle_list_drafts(user_id: str, query_params: Dict[str, Any]) -> Dict[str, 
     
     result = list_user_drafts(user_id, limit, last_evaluated_key)
     
-    # Convert DraftListing objects to dictionaries
-    drafts_data = [draft.to_dict() for draft in result['drafts']]
+    # Convert DraftListing objects to dictionaries and refresh presigned URLs
+    drafts_data = []
+    for draft in result['drafts']:
+        draft_dict = draft.to_dict()
+        # Refresh presigned URLs for images
+        draft_dict = refresh_presigned_urls(draft_dict)
+        drafts_data.append(draft_dict)
     
     response_data = {
         'drafts': drafts_data,
@@ -179,10 +235,14 @@ def handle_get_draft(draft_id: str, user_id: str) -> Dict[str, Any]:
             "body": json.dumps({"error": "Draft not found"})
         }
     
+    # Convert to dict and refresh presigned URLs
+    draft_dict = draft.to_dict()
+    draft_dict = refresh_presigned_urls(draft_dict)
+    
     return {
         "statusCode": 200,
         "headers": get_cors_headers(),
-        "body": json.dumps(draft.to_dict())
+        "body": json.dumps(draft_dict)
     }
 
 
@@ -268,7 +328,7 @@ def handle_validate_draft(draft_id: str, user_id: str) -> Dict[str, Any]:
 def get_cors_headers() -> Dict[str, str]:
     """Get CORS headers for API responses."""
     return {
-        "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+        "Access-Control-Allow-Origin": "*",  # Allow all origins for testing
         "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
         "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
     }

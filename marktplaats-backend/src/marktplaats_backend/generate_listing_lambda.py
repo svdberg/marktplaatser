@@ -121,15 +121,11 @@ def lambda_handler(event, context):
                 Key=image_filename,
                 Body=image_data,
                 ContentType='image/jpeg',
-                ACL='private'  # Keep draft images private
+                ACL='public-read'  # Make draft images publicly readable
             )
             
-            # Generate S3 URL (using presigned URL for private access)
-            image_url = s3.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': s3_bucket, 'Key': image_filename},
-                ExpiresIn=3600 * 24 * 7  # 7 days
-            )
+            # Generate public S3 URL (no presigned URL needed)
+            image_url = f"https://{s3_bucket}.s3.amazonaws.com/{image_filename}"
             
             print(f"Uploaded draft image to S3: {image_filename}")
             

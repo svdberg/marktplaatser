@@ -15,6 +15,13 @@
             </div>
             <NuxtLink
               v-if="userToken"
+              to="/drafts"
+              class="btn btn-secondary"
+            >
+              📝 My Drafts
+            </NuxtLink>
+            <NuxtLink
+              v-if="userToken"
               to="/listings"
               class="btn btn-secondary"
             >
@@ -108,11 +115,36 @@
           </div>
         </div>
 
-        <!-- Generated Listing -->
+        <!-- Draft Created Successfully -->
         <div v-if="generatedListing" class="card mb-8">
-          <h2 class="text-xl font-semibold text-gray-900 mb-4">
-            📝 Generated Listing
-          </h2>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold text-gray-900">
+              📝 Draft Created Successfully!
+            </h2>
+            <NuxtLink 
+              to="/drafts" 
+              class="btn btn-primary text-sm"
+            >
+              📋 View All Drafts
+            </NuxtLink>
+          </div>
+          
+          <!-- Success Message -->
+          <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <span class="text-green-600 text-lg">✅</span>
+              </div>
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-green-800">
+                  {{ generatedListing.message || 'Your draft listing has been created!' }}
+                </h3>
+                <p class="text-sm text-green-700 mt-1">
+                  You can now review, edit, and publish your listing when ready.
+                </p>
+              </div>
+            </div>
+          </div>
           
           <div class="space-y-4">
             <div>
@@ -199,13 +231,20 @@
               >
             </div>
 
-            <button
-              @click="createAdvertisement"
-              :disabled="!price || !postcode || creating"
-              class="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {{ creating ? '⏳ Creating...' : '🎯 Create Advertisement' }}
-            </button>
+            <div class="flex space-x-3">
+              <NuxtLink 
+                to="/drafts" 
+                class="btn btn-secondary flex-1"
+              >
+                📋 View All Drafts
+              </NuxtLink>
+              <button
+                @click="createAnotherDraft"
+                class="btn btn-primary flex-1"
+              >
+                ➕ Create Another Draft
+              </button>
+            </div>
           </div>
         </div>
 
@@ -269,7 +308,6 @@ const selectedFile = ref(null)
 const generatedListing = ref(null)
 const createdAd = ref(null)
 const loading = ref(false)
-const creating = ref(false)
 const loadingMessage = ref('')
 const error = ref(null)
 const price = ref(50)
@@ -327,6 +365,12 @@ const handleFileSelect = (event) => {
 const generateListing = async () => {
   if (!selectedFile.value) return
   
+  // Check if user is authenticated
+  if (!userToken.value) {
+    error.value = 'Please authorize with Marktplaats first'
+    return
+  }
+  
   loading.value = true
   loadingMessage.value = 'Compressing and analyzing image...'
   error.value = null
@@ -348,7 +392,9 @@ const generateListing = async () => {
       console.warn('Compressed image is still quite large:', compressedSize / 1024 / 1024, 'MB')
     }
     
-    // Call generate listing API
+    loadingMessage.value = 'Creating draft listing...'
+    
+    // Call generate listing API with user_id and postcode
     console.log('Calling API:', `${config.public.apiBaseUrl}/generate-listing`)
     
     const response = await fetch(`${config.public.apiBaseUrl}/generate-listing`, {
@@ -357,7 +403,9 @@ const generateListing = async () => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        image: base64.split(',')[1] // Remove data:image/jpeg;base64, prefix
+        image: base64.split(',')[1], // Remove data:image/jpeg;base64, prefix
+        user_id: userToken.value,
+        postcode: postcode.value || '1000AA' // Use entered postcode or default
       })
     })
     
@@ -376,6 +424,7 @@ const generateListing = async () => {
       throw new Error(data.error)
     }
     
+    // Update UI to show draft creation success
     generatedListing.value = data
     
     // Auto-fill the estimated price if available
@@ -383,61 +432,30 @@ const generateListing = async () => {
       price.value = data.estimatedPrice
     }
     
+    loadingMessage.value = 'Draft created successfully!'
+    
   } catch (err) {
     error.value = `Failed to generate listing: ${err.message}`
   } finally {
     loading.value = false
-    loadingMessage.value = ''
+    setTimeout(() => {
+      loadingMessage.value = ''
+    }, 2000) // Keep success message visible for 2 seconds
   }
 }
 
-const createAdvertisement = async () => {
-  if (!generatedListing.value || !price.value || !postcode.value) return
-  
-  creating.value = true
+const createAnotherDraft = () => {
+  // Reset form to create another draft
+  selectedImage.value = null
+  selectedFile.value = null
+  generatedListing.value = null
+  createdAd.value = null
   error.value = null
+  categoryOverride.value = null
   
-  try {
-    // Use the same compressed image for advertisement creation
-    const base64 = await resizeAndCompressImage(selectedFile.value, 1024, 1024, 0.8)
-    
-    const response = await fetch(`${config.public.apiBaseUrl}/create-advertisement`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        listingData: {
-          title: generatedListing.value.title,
-          description: generatedListing.value.description,
-          categoryId: generatedListing.value.categoryId,
-          attributes: generatedListing.value.attributes
-        },
-        image: base64.split(',')[1],
-        userDetails: {
-          postcode: postcode.value,
-          priceModel: {
-            modelType: 'fixed',
-            askingPrice: price.value
-          }
-        },
-        userId: userToken.value,
-        categoryOverride: categoryOverride.value
-      })
-    })
-    
-    const data = await response.json()
-    
-    if (data.error) {
-      throw new Error(data.error)
-    }
-    
-    createdAd.value = data
-    
-  } catch (err) {
-    error.value = `Failed to create advertisement: ${err.message}`
-  } finally {
-    creating.value = false
+  // Reset file input
+  if (fileInput.value) {
+    fileInput.value.value = ''
   }
 }
 
