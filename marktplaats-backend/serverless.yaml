@@ -40,8 +40,12 @@ provider:
             - dynamodb:GetItem
             - dynamodb:UpdateItem
             - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:Scan
           Resource:
             - arn:aws:dynamodb:eu-west-1:*:table/marktplaats-user-tokens
+            - arn:aws:dynamodb:eu-west-1:*:table/marktplaats-draft-listings
+            - arn:aws:dynamodb:eu-west-1:*:table/marktplaats-draft-listings/index/*
 
 functions:
   generateListing:
@@ -242,6 +246,125 @@ functions:
               - X-Amz-Security-Token
               - X-Amz-User-Agent
             allowCredentials: false
+            
+  draftManagement:
+    handler: src/marktplaats_backend/draft_management_lambda.lambda_handler
+    events:
+      # List drafts: GET /drafts
+      - http:
+          path: drafts
+          method: get
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: drafts
+          method: options
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      
+      # Create draft: POST /drafts
+      - http:
+          path: drafts
+          method: post
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      
+      # Get specific draft: GET /drafts/{id}
+      - http:
+          path: drafts/{id}
+          method: get
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: drafts/{id}
+          method: options
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      
+      # Update draft: PATCH /drafts/{id}
+      - http:
+          path: drafts/{id}
+          method: patch
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      
+      # Delete draft: DELETE /drafts/{id}
+      - http:
+          path: drafts/{id}
+          method: delete
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      
+      # Validate draft: POST /drafts/{id}/validate
+      - http:
+          path: drafts/{id}/validate
+          method: post
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
 
 resources:
   Resources:
@@ -255,6 +378,31 @@ resources:
         KeySchema:
           - AttributeName: user_id
             KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+    
+    DraftListingsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: marktplaats-draft-listings
+        AttributeDefinitions:
+          - AttributeName: draftId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: createdAt
+            AttributeType: S
+        KeySchema:
+          - AttributeName: draftId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: UserIdIndex
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
         BillingMode: PAY_PER_REQUEST
 
 plugins:
