@@ -116,3 +116,13 @@ The application uses Serverless Framework for deployment configuration (`serverl
 
 - Snapshot this, pivot to using the image directly in Claude Sonnet 3.7 for recognition and description. Do this next to the kognition input.
 - Snapshot for full working implementation.
+
+## TODO List
+
+- Implement full integration of AWS Bedrock with Claude Sonnet 3.7
+- Create comprehensive test suite for image recognition and listing generation
+- Develop more robust category and attribute mapping
+- Optimize AWS Lambda function performance
+- Add error handling and logging mechanisms
+- Explore potential for multi-language support
+- Investigate caching strategies for API calls and model responses

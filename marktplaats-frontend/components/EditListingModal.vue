@@ -45,13 +45,13 @@
           <input
             v-model="form.title"
             type="text"
-            maxlength="80"
+            maxlength="60"
             required
             class="w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
             :class="{ 'border-red-300': errors.title }"
           >
           <p v-if="errors.title" class="text-red-600 text-sm mt-1">{{ errors.title }}</p>
-          <p class="text-gray-500 text-sm mt-1">{{ form.title?.length || 0 }}/80 characters</p>
+          <p class="text-gray-500 text-sm mt-1">{{ form.title?.length || 0 }}/60 characters</p>
         </div>
 
         <!-- Description -->
@@ -202,7 +202,7 @@ onMounted(() => {
 // Computed
 const isFormValid = computed(() => {
   return form.value.title && 
-         form.value.title.length <= 80 &&
+         form.value.title.length <= 60 &&
          form.value.description && 
          form.value.price > 0 &&
          Object.keys(errors.value).length === 0
@@ -267,8 +267,8 @@ const validateForm = () => {
   
   if (!form.value.title) {
     errors.value.title = 'Title is required'
-  } else if (form.value.title.length > 80) {
-    errors.value.title = 'Title must be 80 characters or less'
+  } else if (form.value.title.length > 60) {
+    errors.value.title = 'Title must be 60 characters or less'
   }
   
   if (!form.value.description) {
