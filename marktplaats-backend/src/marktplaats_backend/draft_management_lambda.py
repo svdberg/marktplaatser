@@ -12,6 +12,11 @@ from .draft_storage import (
     update_draft, delete_draft, get_draft_count_by_user,
     validate_draft_for_publishing
 )
+from .marktplaats_ads_api import (
+    create_advertisement,
+    upload_advertisement_images,
+    validate_advertisement_data
+)
 
 # Initialize S3 client
 s3 = boto3.client('s3', region_name='eu-west-1')
@@ -74,6 +79,7 @@ def lambda_handler(event, context):
     - PATCH /drafts/{id}:                    Update draft
     - DELETE /drafts/{id}:                   Delete draft
     - POST /drafts/{id}/validate:            Validate draft for publishing
+    - POST /drafts/{id}/publish:             Publish draft to Marktplaats
     
     All operations require user_id query parameter for authentication.
     """
@@ -95,8 +101,9 @@ def lambda_handler(event, context):
         draft_id = path_params.get('id')
         user_id = query_params.get('user_id')
         
-        # Check if this is a validate endpoint by looking at the path
+        # Check if this is a validate or publish endpoint by looking at the path
         is_validate_endpoint = '/validate' in path
+        is_publish_endpoint = '/publish' in path
         
         # Validate required parameters
         if not user_id:
@@ -132,6 +139,10 @@ def lambda_handler(event, context):
             elif http_method == 'POST' and draft_id and is_validate_endpoint:
                 # Validate draft: POST /drafts/{id}/validate
                 return handle_validate_draft(draft_id, user_id)
+                
+            elif http_method == 'POST' and draft_id and is_publish_endpoint:
+                # Publish draft: POST /drafts/{id}/publish
+                return handle_publish_draft(draft_id, user_id, event.get('body'))
                 
             else:
                 return {
@@ -323,6 +334,114 @@ def handle_validate_draft(draft_id: str, user_id: str) -> Dict[str, Any]:
         "headers": get_cors_headers(),
         "body": json.dumps(response_data)
     }
+
+
+def handle_publish_draft(draft_id: str, user_id: str, body: str) -> Dict[str, Any]:
+    """Handle POST /drafts/{id}/publish - Publish draft to Marktplaats."""
+    draft = get_draft(draft_id, user_id)
+    
+    if not draft:
+        return {
+            "statusCode": 404,
+            "headers": get_cors_headers(),
+            "body": json.dumps({"error": "Draft not found"})
+        }
+    
+    # Parse optional publishing parameters from body
+    publish_params = {}
+    if body:
+        try:
+            publish_params = json.loads(body)
+        except json.JSONDecodeError:
+            pass  # Ignore invalid JSON, use defaults
+    
+    # Validate draft for publishing
+    validation_errors = validate_draft_for_publishing(draft)
+    if validation_errors:
+        return {
+            "statusCode": 400,
+            "headers": get_cors_headers(),
+            "body": json.dumps({
+                "error": "Draft validation failed",
+                "details": validation_errors
+            })
+        }
+    
+    try:
+        # Convert draft price from euros to cents if needed
+        price_model = draft.price_model.copy() if draft.price_model else {}
+        if "askingPrice" in price_model:
+            # If price is in euros (< 1000), convert to cents
+            if price_model["askingPrice"] < 1000:
+                price_model["askingPrice"] = int(price_model["askingPrice"] * 100)
+        
+        # Set default price model type if not specified
+        if not price_model.get("modelType"):
+            price_model["modelType"] = "fixed"
+        
+        # Create advertisement using draft data
+        ad_response = create_advertisement(
+            title=draft.title,
+            description=draft.description,
+            category_id=draft.category_id,
+            postcode=draft.postcode,
+            price_model=price_model,
+            attributes=draft.attributes or [],
+            user_id=user_id
+        )
+        
+        advertisement_id = ad_response.get("itemId") or ad_response.get("id")
+        if not advertisement_id:
+            raise ValueError(f"No advertisement ID returned. Response keys: {list(ad_response.keys())}")
+        
+        print(f"Advertisement created from draft {draft_id} with ID: {advertisement_id}")
+        
+        # Upload images if available
+        if draft.images:
+            try:
+                print(f"Uploading {len(draft.images)} images to advertisement {advertisement_id}...")
+                upload_response = upload_advertisement_images(advertisement_id, draft.images, user_id=user_id)
+                print(f"Image upload successful: {upload_response}")
+            except Exception as upload_error:
+                print(f"Warning: Image upload failed but advertisement was created: {upload_error}")
+                # Continue - we'll return success even if image upload fails
+        
+        # Optionally delete or archive the draft after successful publishing
+        delete_after_publish = publish_params.get("deleteDraft", True)  # Default to delete
+        if delete_after_publish:
+            try:
+                delete_draft(draft_id, user_id)
+                print(f"Draft {draft_id} deleted after successful publishing")
+            except Exception as delete_error:
+                print(f"Warning: Failed to delete draft after publishing: {delete_error}")
+                # Continue - the advertisement was created successfully
+        
+        return {
+            "statusCode": 200,
+            "headers": get_cors_headers(),
+            "body": json.dumps({
+                "message": "Draft published successfully",
+                "advertisementId": advertisement_id,
+                "title": ad_response.get("title"),
+                "status": ad_response.get("status"),
+                "websiteLink": ad_response.get("_links", {}).get("mp:advertisement-website-link", {}).get("href"),
+                "draftDeleted": delete_after_publish,
+                "imageCount": len(draft.images) if draft.images else 0
+            })
+        }
+        
+    except Exception as e:
+        print(f"Error publishing draft {draft_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "statusCode": 500,
+            "headers": get_cors_headers(),
+            "body": json.dumps({
+                "error": "Failed to publish draft",
+                "details": str(e)
+            })
+        }
 
 
 def get_cors_headers() -> Dict[str, str]:

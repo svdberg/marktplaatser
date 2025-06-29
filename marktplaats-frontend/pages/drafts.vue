@@ -172,10 +172,11 @@
               <!-- Action Buttons -->
               <div class="space-y-2 pt-3 border-t">
                 <button
-                  @click="editDraft(draft)"
-                  class="btn btn-primary w-full text-sm"
+                  @click="publishDraft(draft)"
+                  :disabled="publishing === draft.draftId"
+                  class="btn btn-primary w-full text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  ✏️ Edit & Publish
+                  {{ publishing === draft.draftId ? '⏳ Publishing...' : '🚀 Publish to Marktplaats' }}
                 </button>
                 <div class="flex space-x-2">
                   <button
@@ -292,10 +293,11 @@
           <!-- Action Buttons -->
           <div class="flex space-x-3 mt-6 pt-4 border-t">
             <button
-              @click="editDraft(selectedDraft)"
-              class="btn btn-primary flex-1"
+              @click="publishDraft(selectedDraft)"
+              :disabled="publishing === selectedDraft.draftId"
+              class="btn btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ✏️ Edit & Publish
+              {{ publishing === selectedDraft.draftId ? '⏳ Publishing...' : '🚀 Publish to Marktplaats' }}
             </button>
             <button
               @click="closePreview"
@@ -357,6 +359,7 @@ const hasMore = ref(false)
 const selectedDraft = ref(null)
 const draftToDelete = ref(null)
 const deleting = ref(false)
+const publishing = ref(null) // Track which draft is being published
 
 // Check for stored user ID on mount
 onMounted(() => {
@@ -412,10 +415,52 @@ const loadMore = () => {
   fetchDrafts(true)
 }
 
-const editDraft = (draft) => {
-  // TODO: Navigate to edit page or open edit modal
-  console.log('Edit draft:', draft)
-  // For now, just log - this will be implemented in the next task
+const publishDraft = async (draft) => {
+  if (!draft || publishing.value) return
+  
+  publishing.value = draft.draftId
+  error.value = null
+  
+  try {
+    console.log('Publishing draft:', draft.draftId)
+    
+    const response = await fetch(`${config.public.apiBaseUrl}/drafts/${draft.draftId}/publish?user_id=${userToken.value}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        deleteDraft: true // Delete draft after successful publishing
+      })
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Failed to publish draft: ${errorText}`)
+    }
+    
+    const result = await response.json()
+    console.log('Draft published successfully:', result)
+    
+    // Close preview modal if open
+    if (selectedDraft.value?.draftId === draft.draftId) {
+      selectedDraft.value = null
+    }
+    
+    // Remove draft from local list if it was deleted
+    if (result.draftDeleted) {
+      drafts.value = drafts.value.filter(d => d.draftId !== draft.draftId)
+    }
+    
+    // Show success message (you could also navigate to listings page)
+    alert(`🎉 Draft published successfully!\nAdvertisement ID: ${result.advertisementId}`)
+    
+  } catch (err) {
+    console.error('Error publishing draft:', err)
+    error.value = `Failed to publish draft: ${err.message}`
+  } finally {
+    publishing.value = null
+  }
 }
 
 const previewDraft = (draft) => {

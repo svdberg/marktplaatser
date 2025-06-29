@@ -231,19 +231,43 @@
               >
             </div>
 
-            <div class="flex space-x-3">
-              <NuxtLink 
-                to="/drafts" 
-                class="btn btn-secondary flex-1"
-              >
-                📋 View All Drafts
-              </NuxtLink>
-              <button
-                @click="createAnotherDraft"
-                class="btn btn-primary flex-1"
-              >
-                ➕ Create Another Draft
-              </button>
+            <!-- Dual Action Buttons -->
+            <div class="space-y-3">
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 class="text-sm font-medium text-blue-800 mb-2">Choose your action:</h3>
+                <div class="space-y-2">
+                  <button
+                    @click="publishNow"
+                    :disabled="!price || !postcode || publishing"
+                    class="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {{ publishing ? '⏳ Publishing...' : '🚀 Publish to Marktplaats Now' }}
+                  </button>
+                  <button
+                    @click="saveDraft"
+                    :disabled="saving"
+                    class="btn btn-secondary w-full"
+                  >
+                    {{ saving ? '⏳ Saving...' : '📝 Save as Draft for Later' }}
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Navigation Options -->
+              <div class="flex space-x-3 pt-2 border-t">
+                <NuxtLink 
+                  to="/drafts" 
+                  class="btn btn-outline flex-1 text-sm"
+                >
+                  📋 View All Drafts
+                </NuxtLink>
+                <button
+                  @click="createAnotherDraft"
+                  class="btn btn-outline flex-1 text-sm"
+                >
+                  ➕ Create Another
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -313,6 +337,8 @@ const error = ref(null)
 const price = ref(50)
 const postcode = ref('1234AB')
 const categoryOverride = ref(null)
+const publishing = ref(false)
+const saving = ref(false)
 
 // Check for stored user ID on mount
 onMounted(() => {
@@ -456,6 +482,77 @@ const createAnotherDraft = () => {
   // Reset file input
   if (fileInput.value) {
     fileInput.value.value = ''
+  }
+}
+
+const publishNow = async () => {
+  if (!generatedListing.value || !price.value || !postcode.value) return
+  
+  publishing.value = true
+  error.value = null
+  
+  try {
+    // Use the same compressed image for advertisement creation
+    const base64 = await resizeAndCompressImage(selectedFile.value, 1024, 1024, 0.8)
+    
+    const response = await fetch(`${config.public.apiBaseUrl}/create-advertisement`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        listingData: {
+          title: generatedListing.value.title,
+          description: generatedListing.value.description,
+          categoryId: generatedListing.value.categoryId,
+          attributes: generatedListing.value.attributes
+        },
+        image: base64.split(',')[1],
+        userDetails: {
+          postcode: postcode.value,
+          priceModel: {
+            modelType: 'fixed',
+            askingPrice: Math.round(price.value * 100) // Convert euros to cents
+          }
+        },
+        userId: userToken.value,
+        categoryOverride: categoryOverride.value
+      })
+    })
+    
+    const data = await response.json()
+    
+    if (data.error) {
+      throw new Error(data.error)
+    }
+    
+    createdAd.value = data
+    generatedListing.value = null // Hide the draft options after successful publish
+    
+  } catch (err) {
+    error.value = `Failed to publish advertisement: ${err.message}`
+  } finally {
+    publishing.value = false
+  }
+}
+
+const saveDraft = async () => {
+  if (!generatedListing.value) return
+  
+  saving.value = true
+  error.value = null
+  
+  try {
+    // The draft is already saved by the AI generation process
+    // This function can be used for additional draft updates if needed
+    
+    // Show success message and navigate to drafts
+    await navigateTo('/drafts')
+    
+  } catch (err) {
+    error.value = `Failed to save draft: ${err.message}`
+  } finally {
+    saving.value = false
   }
 }
 

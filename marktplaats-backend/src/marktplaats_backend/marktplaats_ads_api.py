@@ -390,7 +390,8 @@ def get_user_advertisement(advertisement_id, user_id):
 
 def update_user_advertisement(advertisement_id, user_id, title=None, description=None, price_model=None, attributes=None):
     """
-    Update an existing advertisement for a specific user using PATCH with JSON Patch operations.
+    Update an existing advertisement for a specific user using differential PATCH operations.
+    Only sends PATCH operations for fields that have actually changed.
     
     Args:
         advertisement_id (str/int): Advertisement ID
@@ -417,93 +418,107 @@ def update_user_advertisement(advertisement_id, user_id, title=None, description
     
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json-patch+json",
         "Accept": "application/json"
     }
     
-    # Build JSON Patch operations
+    # Step 1: Fetch current advertisement data
+    print(f"Fetching current advertisement {advertisement_id} to determine changes...")
+    current_response = requests.get(
+        f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
+        headers=headers
+    )
+    
+    if current_response.status_code != 200:
+        print(f"Failed to fetch current advertisement: {current_response.status_code} - {current_response.text}")
+        current_response.raise_for_status()
+    
+    current_ad = current_response.json()
+    print(f"Current advertisement data fetched successfully")
+    
+    # Step 2: Build JSON Patch operations only for changed fields
+    # NOTE: We deliberately DO NOT handle reserved status changes here
+    # Reserved status should be handled separately via toggle_advertisement_reserved_status
     patch_operations = []
     
-    if title is not None:
+    # Check title change
+    if title is not None and current_ad.get('title') != title:
+        print(f"Title changed: '{current_ad.get('title')}' -> '{title}'")
         patch_operations.append({
             "op": "replace",
             "path": "/title",  
             "value": title
         })
     
-    if description is not None:
+    # Check description change
+    if description is not None and current_ad.get('description') != description:
+        print(f"Description changed: '{current_ad.get('description')}' -> '{description}'")
         patch_operations.append({
             "op": "replace",
             "path": "/description",
             "value": description
         })
     
+    # Check price model changes
     if price_model is not None and 'askingPrice' in price_model:
+        current_price_model = current_ad.get('priceModel', {})
+        current_asking_price = current_price_model.get('askingPrice')
         new_asking_price = price_model['askingPrice']
-        print(f"Updating asking price to {new_asking_price}")
         
-        # Add operation to update asking price
-        patch_operations.append({
-            "op": "replace",
-            "path": "/priceModel/askingPrice",
-            "value": new_asking_price
-        })
-        
-        # Get current advertisement to check if we need to adjust minimalBid
-        print(f"Getting current advertisement to check minimalBid...")
-        current_ad_response = requests.get(
-            f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/json"
-            }
-        )
-        
-        if current_ad_response.status_code == 200:
-            current_ad = current_ad_response.json()
-            current_price_model = current_ad.get('priceModel', {})
+        if current_asking_price != new_asking_price:
+            print(f"Asking price changed: {current_asking_price} -> {new_asking_price}")
+            patch_operations.append({
+                "op": "replace",
+                "path": "/priceModel/askingPrice",
+                "value": new_asking_price
+            })
+            
+            # Adjust minimalBid if necessary
             current_minimal_bid = current_price_model.get('minimalBid')
-            
-            print(f"Current price model: {current_price_model}")
-            
-            # Adjust minimalBid if it exists and is greater than new askingPrice
             if current_minimal_bid is not None and current_minimal_bid > new_asking_price:
                 new_minimal_bid = new_asking_price - 1
                 print(f"Adjusting minimalBid from {current_minimal_bid} to {new_minimal_bid}")
-                
                 patch_operations.append({
                     "op": "replace",
                     "path": "/priceModel/minimalBid",
                     "value": new_minimal_bid
                 })
     
+    # Check attributes changes
     if attributes is not None:
-        patch_operations.append({
-            "op": "replace",
-            "path": "/attributes",
-            "value": attributes
-        })
+        current_attributes = current_ad.get('attributes', [])
+        # Simple comparison - could be made more sophisticated
+        if current_attributes != attributes:
+            print(f"Attributes changed: {len(current_attributes)} -> {len(attributes)} items")
+            patch_operations.append({
+                "op": "replace",
+                "path": "/attributes",
+                "value": attributes
+            })
     
+    # Step 3: If no changes detected, return current data
     if not patch_operations:
-        raise ValueError("At least one field must be provided for update")
+        print("No changes detected, returning current advertisement data")
+        return current_ad
     
     # Validate title length before sending to API
     for operation in patch_operations:
-        if operation.get("path") == "/title" and len(operation.get("value", "")) > 80:
-            raise ValueError(f"Title is too long ({len(operation['value'])} characters). Maximum is 80 characters.")
+        if operation.get("path") == "/title" and len(operation.get("value", "")) > 60:
+            raise ValueError(f"Title is too long ({len(operation['value'])} characters). Maximum is 60 characters.")
     
-    print(f"Updating advertisement {advertisement_id} for user {user_id}")
-    print(f"JSON Patch operations: {patch_operations}")
+    # Step 4: Send only the necessary PATCH operations
+    print(f"Sending {len(patch_operations)} PATCH operations to Marktplaats API:")
+    for i, op in enumerate(patch_operations):
+        print(f"  {i+1}. {op['op']} {op['path']} = {op['value']}")
     
-    # Debug: Print the actual JSON being sent
-    import json as json_module
-    json_payload = json_module.dumps(patch_operations, ensure_ascii=False)
-    print(f"JSON Patch payload being sent: {json_payload}")
-    print(f"JSON Patch payload length: {len(json_payload)}")
+    patch_headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json-patch+json",
+        "Accept": "application/json"
+    }
     
     response = requests.patch(
         f"{MARKTPLAATS_API_BASE}/advertisements/{advertisement_id}",
-        headers=headers,
+        headers=patch_headers,
         json=patch_operations
     )
     
