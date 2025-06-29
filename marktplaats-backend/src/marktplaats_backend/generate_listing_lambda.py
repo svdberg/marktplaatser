@@ -2,6 +2,8 @@ import json
 import os
 import base64
 import boto3
+import uuid
+from datetime import datetime
 
 # Force AWS region to eu-west-1 at the very start
 os.environ['AWS_REGION'] = 'eu-west-1'
@@ -16,6 +18,7 @@ from .attribute_mapper import (
     fetch_category_attributes,
     map_ai_attributes_to_marktplaats,
 )
+from .draft_storage import create_draft_from_ai_generation
 
 s3 = boto3.client("s3", region_name="eu-west-1")
 
@@ -24,6 +27,20 @@ def lambda_handler(event, context):
     try:
         body = json.loads(event["body"])
         image_data = base64.b64decode(body["image"])
+        user_id = body.get("user_id")
+        postcode = body.get("postcode", "1000AA")  # Default postcode if not provided
+        
+        # Validate required parameters
+        if not user_id:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
+                "body": json.dumps({"error": "user_id is required"})
+            }
 
         # Extract labels and text using Rekognition for additional context
         labels, text = extract_labels_and_text(image_data)
@@ -94,16 +111,70 @@ def lambda_handler(event, context):
             else:
                 price_range = None
 
-        # Build listing result
-        listing = {
+        # Upload image to S3 for draft storage
+        image_filename = f"drafts/{user_id}/{uuid.uuid4().hex}.jpg"
+        s3_bucket = os.environ.get('S3_BUCKET', 'marktplaatser-images')
+        
+        try:
+            s3.put_object(
+                Bucket=s3_bucket,
+                Key=image_filename,
+                Body=image_data,
+                ContentType='image/jpeg',
+                ACL='private'  # Keep draft images private
+            )
+            
+            # Generate S3 URL (using presigned URL for private access)
+            image_url = s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': s3_bucket, 'Key': image_filename},
+                ExpiresIn=3600 * 24 * 7  # 7 days
+            )
+            
+            print(f"Uploaded draft image to S3: {image_filename}")
+            
+        except Exception as e:
+            print(f"Error uploading image to S3: {str(e)}")
+            # Continue without image if upload fails
+            image_url = None
+
+        # Create price model for the draft
+        price_model = {}
+        if estimated_price is not None:
+            price_model = {
+                "modelType": "fixed",
+                "askingPrice": int(estimated_price * 100)  # Convert euros to cents
+            }
+
+        # Build AI result for draft creation
+        ai_result = {
             "title": listing_data["title"],
             "description": listing_data["description"],
             "categoryId": category_match["categoryId"],
             "categoryName": category_match["match"],
             "attributes": mapped_attributes,
+            "priceModel": price_model
+        }
+        
+        # Create draft listing
+        draft = create_draft_from_ai_generation(
+            user_id=user_id,
+            ai_result=ai_result,
+            image_urls=[image_url] if image_url else [],
+            postcode=postcode
+        )
+        
+        # Return draft information with additional AI insights
+        response_data = {
+            "draftId": draft.draft_id,
+            "title": draft.title,
+            "description": draft.description,
+            "categoryId": draft.category_id,
+            "categoryName": draft.category_name,
             "estimatedPrice": estimated_price,
             "priceRange": price_range,
-            "priceConfidence": price_confidence
+            "priceConfidence": price_confidence,
+            "message": "Draft listing created successfully! You can edit it in the Drafts section before publishing."
         }
 
         return {
@@ -113,7 +184,7 @@ def lambda_handler(event, context):
                 "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
                 "Access-Control-Allow-Methods": "POST,OPTIONS"
             },
-            "body": json.dumps(listing)
+            "body": json.dumps(response_data)
         }
 
     except Exception as e:

@@ -20,4 +20,4 @@ echo "Sending request to Lambda..."
 
 curl -s -X POST "$API_URL" \
   -H "Content-Type: application/json" \
-  -d "{\"image\": \"${BASE64_IMAGE}\"}" | jq
+  -d "{\"image\": \"${BASE64_IMAGE}\", \"user_id\": \"test_user_script\", \"postcode\": \"1234AB\"}" | jq
