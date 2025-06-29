@@ -172,7 +172,7 @@
               >
                 {{ togglingReservedIds.includes(listing.itemId || listing.id) 
                   ? '⏳ Updating...' 
-                  : (listing.reserved ? 'Unreserve' : 'Mark Reserved') 
+                  : (listing.reserved ? '🔓 Unreserve' : '🔒 Mark Reserved') 
                 }}
               </button>
             </div>
