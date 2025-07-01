@@ -160,6 +160,59 @@ def store_user_tokens(user_id, token_data):
     )
 
 
+def get_marktplaats_user_id(access_token):
+    """
+    Get the Marktplaats user ID from an access token.
+    
+    Args:
+        access_token (str): User access token
+        
+    Returns:
+        str: Marktplaats user ID
+        
+    Raises:
+        ValueError: If unable to get user ID
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json"
+    }
+    
+    # Call the /me endpoint which redirects to the user's profile
+    response = requests.get(
+        "https://api.marktplaats.nl/v1/me",
+        headers=headers,
+        allow_redirects=False  # Don't follow redirects so we can get the Location header
+    )
+    
+    print(f"GET /me response status: {response.status_code}")
+    print(f"GET /me response headers: {dict(response.headers)}")
+    
+    # Extract Marktplaats user ID from the redirect location header
+    if response.status_code == 302 and 'location' in response.headers:
+        location = response.headers['location']
+        # Extract user ID from /v1/users/{userId}
+        if '/users/' in location:
+            marktplaats_user_id = location.split('/users/')[-1]
+            print(f"Extracted Marktplaats user ID: {marktplaats_user_id}")
+            return marktplaats_user_id
+    
+    # If that doesn't work, try a direct API call to get user info
+    try:
+        api_response = requests.get(
+            "https://api.marktplaats.nl/v1/me",
+            headers=headers
+        )
+        if api_response.status_code == 200:
+            user_data = api_response.json()
+            if 'userId' in user_data:
+                return str(user_data['userId'])
+    except Exception as e:
+        print(f"Direct API call failed: {str(e)}")
+    
+    raise ValueError(f"Could not determine Marktplaats user ID. Status: {response.status_code}, Headers: {dict(response.headers)}")
+
+
 def get_user_token(user_id):
     """
     Retrieve user token from DynamoDB.

@@ -178,16 +178,22 @@
                 >
                   {{ publishing === draft.draftId ? '⏳ Publishing...' : '🚀 Publish to Marktplaats' }}
                 </button>
-                <div class="flex space-x-2">
+                <div class="grid grid-cols-3 gap-2">
+                  <button
+                    @click="editDraft(draft)"
+                    class="btn btn-secondary text-sm"
+                  >
+                    ✏️ Edit
+                  </button>
                   <button
                     @click="previewDraft(draft)"
-                    class="btn btn-secondary flex-1 text-sm"
+                    class="btn btn-secondary text-sm"
                   >
                     👁️ Preview
                   </button>
                   <button
                     @click="deleteDraft(draft.draftId)"
-                    class="btn bg-red-100 text-red-700 hover:bg-red-200 flex-1 text-sm"
+                    class="btn bg-red-100 text-red-700 hover:bg-red-200 text-sm"
                   >
                     🗑️ Delete
                   </button>
@@ -310,6 +316,14 @@
       </div>
     </div>
 
+    <!-- Edit Draft Modal -->
+    <EditDraftModal
+      v-if="draftToEdit"
+      :draft="draftToEdit"
+      @close="closeEditModal"
+      @saved="handleDraftSaved"
+    />
+
     <!-- Delete Confirmation Modal -->
     <div
       v-if="draftToDelete"
@@ -347,6 +361,8 @@
 </template>
 
 <script setup>
+import EditDraftModal from '~/components/EditDraftModal.vue'
+
 const config = useRuntimeConfig()
 
 // Reactive data
@@ -357,6 +373,7 @@ const loadingMore = ref(false)
 const error = ref(null)
 const hasMore = ref(false)
 const selectedDraft = ref(null)
+const draftToEdit = ref(null)
 const draftToDelete = ref(null)
 const deleting = ref(false)
 const publishing = ref(null) // Track which draft is being published
@@ -507,6 +524,28 @@ const confirmDelete = async () => {
 
 const cancelDelete = () => {
   draftToDelete.value = null
+}
+
+const editDraft = (draft) => {
+  draftToEdit.value = draft
+}
+
+const closeEditModal = () => {
+  draftToEdit.value = null
+}
+
+const handleDraftSaved = (updatedDraft) => {
+  // Update the draft in the local list
+  const index = drafts.value.findIndex(d => d.draftId === updatedDraft.draftId)
+  if (index !== -1) {
+    drafts.value[index] = updatedDraft
+  }
+  
+  // Close the edit modal
+  draftToEdit.value = null
+  
+  // Show success message
+  alert('📝 Draft updated successfully!')
 }
 
 const formatDate = (dateStr) => {

@@ -19,6 +19,7 @@ from .attribute_mapper import (
     map_ai_attributes_to_marktplaats,
 )
 from .draft_storage import create_draft_from_ai_generation
+from .marktplaats_auth import get_marktplaats_user_id, get_user_token
 
 s3 = boto3.client("s3", region_name="eu-west-1")
 
@@ -27,11 +28,11 @@ def lambda_handler(event, context):
     try:
         body = json.loads(event["body"])
         image_data = base64.b64decode(body["image"])
-        user_id = body.get("user_id")
+        internal_user_id = body.get("user_id")
         postcode = body.get("postcode", "1000AA")  # Default postcode if not provided
         
         # Validate required parameters
-        if not user_id:
+        if not internal_user_id:
             return {
                 "statusCode": 400,
                 "headers": {
@@ -40,6 +41,23 @@ def lambda_handler(event, context):
                     "Access-Control-Allow-Methods": "POST,OPTIONS"
                 },
                 "body": json.dumps({"error": "user_id is required"})
+            }
+        
+        # Resolve to Marktplaats user ID for consistent draft storage
+        try:
+            access_token = get_user_token(internal_user_id)
+            marktplaats_user_id = get_marktplaats_user_id(access_token)
+            print(f"Resolved internal user {internal_user_id} to Marktplaats user {marktplaats_user_id}")
+        except Exception as e:
+            print(f"Failed to resolve Marktplaats user ID: {str(e)}")
+            return {
+                "statusCode": 401,
+                "headers": {
+                    "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                    "Access-Control-Allow-Methods": "POST,OPTIONS"
+                },
+                "body": json.dumps({"error": f"Could not resolve user identity: {str(e)}"})
             }
 
         # Extract labels and text using Rekognition for additional context
@@ -112,7 +130,7 @@ def lambda_handler(event, context):
                 price_range = None
 
         # Upload image to S3 for draft storage
-        image_filename = f"drafts/{user_id}/{uuid.uuid4().hex}.jpg"
+        image_filename = f"drafts/{marktplaats_user_id}/{uuid.uuid4().hex}.jpg"
         s3_bucket = os.environ.get('S3_BUCKET', 'marktplaatser-images')
         
         try:
@@ -154,7 +172,7 @@ def lambda_handler(event, context):
         
         # Create draft listing
         draft = create_draft_from_ai_generation(
-            user_id=user_id,
+            user_id=marktplaats_user_id,
             ai_result=ai_result,
             image_urls=[image_url] if image_url else [],
             postcode=postcode

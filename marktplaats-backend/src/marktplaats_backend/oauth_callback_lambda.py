@@ -5,7 +5,7 @@ import uuid
 # Force AWS region to eu-west-1 at the very start
 os.environ['AWS_REGION'] = 'eu-west-1'
 
-from .marktplaats_auth import exchange_code_for_token, store_user_tokens
+from .marktplaats_auth import exchange_code_for_token, store_user_tokens, get_marktplaats_user_id
 
 
 def lambda_handler(event, context):
@@ -128,8 +128,15 @@ def lambda_handler(event, context):
                 """
             }
         
-        # Generate a simple user ID (in production, this should be from Marktplaats user info)
-        user_id = state if state else str(uuid.uuid4())
+        # Get the actual Marktplaats user ID from the access token
+        try:
+            user_id = get_marktplaats_user_id(token_data['access_token'])
+            print(f"Got Marktplaats user ID: {user_id}")
+        except Exception as e:
+            print(f"Failed to get Marktplaats user ID: {str(e)}")
+            # Fallback to UUID for backward compatibility
+            user_id = state if state else str(uuid.uuid4())
+            print(f"Using fallback user_id: {user_id}")
         
         # Store user tokens
         try:

@@ -17,9 +17,38 @@ from .marktplaats_ads_api import (
     upload_advertisement_images,
     validate_advertisement_data
 )
+from .marktplaats_auth import get_marktplaats_user_id, get_user_token
 
 # Initialize S3 client
 s3 = boto3.client('s3', region_name='eu-west-1')
+
+
+def resolve_marktplaats_user_id(internal_user_id: str) -> str:
+    """
+    Convert internal user ID to Marktplaats user ID for consistent draft storage.
+    
+    Args:
+        internal_user_id: Internal user ID from frontend
+        
+    Returns:
+        str: Marktplaats user ID
+        
+    Raises:
+        ValueError: If user token is invalid or Marktplaats ID cannot be determined
+    """
+    try:
+        # Get user's access token using internal ID
+        access_token = get_user_token(internal_user_id)
+        
+        # Extract Marktplaats user ID from token
+        marktplaats_user_id = get_marktplaats_user_id(access_token)
+        
+        print(f"Resolved internal user {internal_user_id} to Marktplaats user {marktplaats_user_id}")
+        return marktplaats_user_id
+        
+    except Exception as e:
+        print(f"Failed to resolve Marktplaats user ID for {internal_user_id}: {str(e)}")
+        raise ValueError(f"Could not resolve user identity: {str(e)}")
 
 
 def refresh_presigned_urls(draft_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -99,50 +128,60 @@ def lambda_handler(event, context):
             }
         
         draft_id = path_params.get('id')
-        user_id = query_params.get('user_id')
+        internal_user_id = query_params.get('user_id')
         
         # Check if this is a validate or publish endpoint by looking at the path
         is_validate_endpoint = '/validate' in path
         is_publish_endpoint = '/publish' in path
         
         # Validate required parameters
-        if not user_id:
+        if not internal_user_id:
             return {
                 "statusCode": 400,
                 "headers": get_cors_headers(),
                 "body": json.dumps({"error": "user_id query parameter is required"})
             }
         
-        print(f"Managing drafts for user {user_id} via {http_method} {event.get('path', '')}")
+        # Resolve to Marktplaats user ID for consistent draft storage
+        try:
+            marktplaats_user_id = resolve_marktplaats_user_id(internal_user_id)
+        except ValueError as e:
+            return {
+                "statusCode": 401,
+                "headers": get_cors_headers(),
+                "body": json.dumps({"error": str(e)})
+            }
+        
+        print(f"Managing drafts for Marktplaats user {marktplaats_user_id} (internal: {internal_user_id}) via {http_method} {event.get('path', '')}")
         
         try:
             if http_method == 'GET' and not draft_id:
                 # List user's drafts: GET /drafts
-                return handle_list_drafts(user_id, query_params)
+                return handle_list_drafts(marktplaats_user_id, internal_user_id, query_params)
                 
             elif http_method == 'POST' and not draft_id:
                 # Create new draft: POST /drafts
-                return handle_create_draft(user_id, event.get('body'))
+                return handle_create_draft(marktplaats_user_id, event.get('body'))
                 
             elif http_method == 'GET' and draft_id:
                 # Get specific draft: GET /drafts/{id}
-                return handle_get_draft(draft_id, user_id)
+                return handle_get_draft(draft_id, marktplaats_user_id, internal_user_id)
                 
             elif http_method == 'PATCH' and draft_id:
                 # Update draft: PATCH /drafts/{id}
-                return handle_update_draft(draft_id, user_id, event.get('body'))
+                return handle_update_draft(draft_id, marktplaats_user_id, internal_user_id, event.get('body'))
                 
             elif http_method == 'DELETE' and draft_id:
                 # Delete draft: DELETE /drafts/{id}
-                return handle_delete_draft(draft_id, user_id)
+                return handle_delete_draft(draft_id, marktplaats_user_id, internal_user_id)
                 
             elif http_method == 'POST' and draft_id and is_validate_endpoint:
                 # Validate draft: POST /drafts/{id}/validate
-                return handle_validate_draft(draft_id, user_id)
+                return handle_validate_draft(draft_id, marktplaats_user_id, internal_user_id)
                 
             elif http_method == 'POST' and draft_id and is_publish_endpoint:
                 # Publish draft: POST /drafts/{id}/publish
-                return handle_publish_draft(draft_id, user_id, event.get('body'))
+                return handle_publish_draft(draft_id, marktplaats_user_id, internal_user_id, event.get('body'))
                 
             else:
                 return {
@@ -153,7 +192,7 @@ def lambda_handler(event, context):
                 
         except ValueError as e:
             # Handle validation errors and user input errors
-            print(f"Validation error for user {user_id}: {str(e)}")
+            print(f"Validation error for Marktplaats user {marktplaats_user_id}: {str(e)}")
             return {
                 "statusCode": 400,
                 "headers": get_cors_headers(),
@@ -171,12 +210,21 @@ def lambda_handler(event, context):
         }
 
 
-def handle_list_drafts(user_id: str, query_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle GET /drafts - List user's draft listings."""
+def handle_list_drafts(marktplaats_user_id: str, internal_user_id: str, query_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle GET /drafts - List user's draft listings with hybrid search for migration."""
     limit = min(int(query_params.get('limit', 50)), 100)  # Max 100 items
     last_evaluated_key = query_params.get('last_evaluated_key')
     
-    result = list_user_drafts(user_id, limit, last_evaluated_key)
+    # Try with Marktplaats user ID first (new format)
+    result = list_user_drafts(marktplaats_user_id, limit, last_evaluated_key)
+    
+    # If no drafts found with Marktplaats user ID, try with internal user ID (legacy format)
+    if not result['drafts']:
+        print(f"No drafts found for Marktplaats user {marktplaats_user_id}, trying legacy internal user {internal_user_id}")
+        legacy_result = list_user_drafts(internal_user_id, limit, last_evaluated_key)
+        if legacy_result['drafts']:
+            print(f"Found {len(legacy_result['drafts'])} legacy drafts for internal user {internal_user_id}")
+            result = legacy_result
     
     # Convert DraftListing objects to dictionaries and refresh presigned URLs
     drafts_data = []
@@ -235,9 +283,14 @@ def handle_create_draft(user_id: str, body: str) -> Dict[str, Any]:
     }
 
 
-def handle_get_draft(draft_id: str, user_id: str) -> Dict[str, Any]:
-    """Handle GET /drafts/{id} - Get specific draft listing."""
-    draft = get_draft(draft_id, user_id)
+def handle_get_draft(draft_id: str, marktplaats_user_id: str, internal_user_id: str) -> Dict[str, Any]:
+    """Handle GET /drafts/{id} - Get specific draft listing with hybrid search."""
+    # Try with Marktplaats user ID first
+    draft = get_draft(draft_id, marktplaats_user_id)
+    
+    # If not found, try with internal user ID (legacy)
+    if not draft:
+        draft = get_draft(draft_id, internal_user_id)
     
     if not draft:
         return {
@@ -257,8 +310,8 @@ def handle_get_draft(draft_id: str, user_id: str) -> Dict[str, Any]:
     }
 
 
-def handle_update_draft(draft_id: str, user_id: str, body: str) -> Dict[str, Any]:
-    """Handle PATCH /drafts/{id} - Update draft listing."""
+def handle_update_draft(draft_id: str, marktplaats_user_id: str, internal_user_id: str, body: str) -> Dict[str, Any]:
+    """Handle PATCH /drafts/{id} - Update draft listing with hybrid search."""
     if not body:
         raise ValueError("Request body is required for updates")
     
@@ -274,7 +327,12 @@ def handle_update_draft(draft_id: str, user_id: str, body: str) -> Dict[str, Any
     if 'title' in updates and len(updates['title']) > 80:
         raise ValueError("Title must be 80 characters or less")
     
-    updated_draft = update_draft(draft_id, user_id, updates)
+    # Try with Marktplaats user ID first
+    updated_draft = update_draft(draft_id, marktplaats_user_id, updates)
+    
+    # If not found, try with internal user ID (legacy)
+    if not updated_draft:
+        updated_draft = update_draft(draft_id, internal_user_id, updates)
     
     if not updated_draft:
         return {
@@ -290,9 +348,14 @@ def handle_update_draft(draft_id: str, user_id: str, body: str) -> Dict[str, Any
     }
 
 
-def handle_delete_draft(draft_id: str, user_id: str) -> Dict[str, Any]:
-    """Handle DELETE /drafts/{id} - Delete draft listing."""
-    success = delete_draft(draft_id, user_id)
+def handle_delete_draft(draft_id: str, marktplaats_user_id: str, internal_user_id: str) -> Dict[str, Any]:
+    """Handle DELETE /drafts/{id} - Delete draft listing with hybrid search."""
+    # Try with Marktplaats user ID first
+    success = delete_draft(draft_id, marktplaats_user_id)
+    
+    # If not found, try with internal user ID (legacy)
+    if not success:
+        success = delete_draft(draft_id, internal_user_id)
     
     if not success:
         return {
@@ -308,9 +371,14 @@ def handle_delete_draft(draft_id: str, user_id: str) -> Dict[str, Any]:
     }
 
 
-def handle_validate_draft(draft_id: str, user_id: str) -> Dict[str, Any]:
-    """Handle POST /drafts/{id}/validate - Validate draft for publishing."""
-    draft = get_draft(draft_id, user_id)
+def handle_validate_draft(draft_id: str, marktplaats_user_id: str, internal_user_id: str) -> Dict[str, Any]:
+    """Handle POST /drafts/{id}/validate - Validate draft for publishing with hybrid search."""
+    # Try with Marktplaats user ID first
+    draft = get_draft(draft_id, marktplaats_user_id)
+    
+    # If not found, try with internal user ID (legacy)
+    if not draft:
+        draft = get_draft(draft_id, internal_user_id)
     
     if not draft:
         return {
@@ -336,9 +404,14 @@ def handle_validate_draft(draft_id: str, user_id: str) -> Dict[str, Any]:
     }
 
 
-def handle_publish_draft(draft_id: str, user_id: str, body: str) -> Dict[str, Any]:
-    """Handle POST /drafts/{id}/publish - Publish draft to Marktplaats."""
-    draft = get_draft(draft_id, user_id)
+def handle_publish_draft(draft_id: str, marktplaats_user_id: str, internal_user_id: str, body: str) -> Dict[str, Any]:
+    """Handle POST /drafts/{id}/publish - Publish draft to Marktplaats with hybrid search."""
+    # Try with Marktplaats user ID first
+    draft = get_draft(draft_id, marktplaats_user_id)
+    
+    # If not found, try with internal user ID (legacy)
+    if not draft:
+        draft = get_draft(draft_id, internal_user_id)
     
     if not draft:
         return {
@@ -387,7 +460,7 @@ def handle_publish_draft(draft_id: str, user_id: str, body: str) -> Dict[str, An
             postcode=draft.postcode,
             price_model=price_model,
             attributes=draft.attributes or [],
-            user_id=user_id
+            user_id=internal_user_id
         )
         
         advertisement_id = ad_response.get("itemId") or ad_response.get("id")
@@ -400,7 +473,7 @@ def handle_publish_draft(draft_id: str, user_id: str, body: str) -> Dict[str, An
         if draft.images:
             try:
                 print(f"Uploading {len(draft.images)} images to advertisement {advertisement_id}...")
-                upload_response = upload_advertisement_images(advertisement_id, draft.images, user_id=user_id)
+                upload_response = upload_advertisement_images(advertisement_id, draft.images, user_id=internal_user_id)
                 print(f"Image upload successful: {upload_response}")
             except Exception as upload_error:
                 print(f"Warning: Image upload failed but advertisement was created: {upload_error}")
@@ -410,8 +483,15 @@ def handle_publish_draft(draft_id: str, user_id: str, body: str) -> Dict[str, An
         delete_after_publish = publish_params.get("deleteDraft", True)  # Default to delete
         if delete_after_publish:
             try:
-                delete_draft(draft_id, user_id)
-                print(f"Draft {draft_id} deleted after successful publishing")
+                # Try to delete with the user ID that was used to find the draft
+                success = delete_draft(draft_id, marktplaats_user_id)
+                if not success:
+                    success = delete_draft(draft_id, internal_user_id)
+                
+                if success:
+                    print(f"Draft {draft_id} deleted after successful publishing")
+                else:
+                    print(f"Warning: Could not delete draft {draft_id} after publishing")
             except Exception as delete_error:
                 print(f"Warning: Failed to delete draft after publishing: {delete_error}")
                 # Continue - the advertisement was created successfully
