@@ -157,7 +157,7 @@ def lambda_handler(event, context):
         if estimated_price is not None:
             price_model = {
                 "modelType": "fixed",
-                "askingPrice": int(estimated_price * 100)  # Convert euros to cents
+                "askingPrice": estimated_price  # Store in euros, convert to cents when publishing
             }
 
         # Build AI result for draft creation

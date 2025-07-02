@@ -324,8 +324,8 @@ def handle_update_draft(draft_id: str, marktplaats_user_id: str, internal_user_i
         raise ValueError("At least one field must be provided for update")
     
     # Validate title length if provided
-    if 'title' in updates and len(updates['title']) > 80:
-        raise ValueError("Title must be 80 characters or less")
+    if 'title' in updates and len(updates['title']) > 60:
+        raise ValueError("Title must be 60 characters or less")
     
     # Try with Marktplaats user ID first
     updated_draft = update_draft(draft_id, marktplaats_user_id, updates)
@@ -441,12 +441,13 @@ def handle_publish_draft(draft_id: str, marktplaats_user_id: str, internal_user_
         }
     
     try:
-        # Convert draft price from euros to cents if needed
+        # Convert draft price from euros to cents (drafts store euros, API expects cents)
         price_model = draft.price_model.copy() if draft.price_model else {}
         if "askingPrice" in price_model:
-            # If price is in euros (< 1000), convert to cents
-            if price_model["askingPrice"] < 1000:
-                price_model["askingPrice"] = int(price_model["askingPrice"] * 100)
+            # Always convert euros to cents (multiply by 100)
+            euro_price = price_model["askingPrice"]
+            price_model["askingPrice"] = int(euro_price * 100)
+            print(f"Converted draft price from {euro_price} euros to {price_model['askingPrice']} cents")
         
         # Set default price model type if not specified
         if not price_model.get("modelType"):

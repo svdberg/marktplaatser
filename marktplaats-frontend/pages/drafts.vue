@@ -1,35 +1,11 @@
 <template>
   <div class="min-h-screen">
     <!-- Header -->
-    <header class="bg-white shadow-sm border-b">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center h-16">
-          <div class="flex items-center space-x-4">
-            <NuxtLink to="/" class="text-primary hover:text-orange-700">
-              ← Back to Home
-            </NuxtLink>
-            <h1 class="text-xl font-bold text-gray-900">
-              📝 My Drafts
-            </h1>
-          </div>
-          <div class="flex items-center space-x-4">
-            <NuxtLink to="/listings" class="btn btn-secondary text-sm">
-              📋 Published Listings
-            </NuxtLink>
-            <div v-if="userToken" class="text-sm text-gray-600">
-              ✅ Authorized
-            </div>
-            <button
-              v-if="userToken"
-              @click="logout"
-              class="btn btn-secondary"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    </header>
+    <Header 
+      :user-token="userToken" 
+      current-page="drafts"
+      @logout="logout"
+    />
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

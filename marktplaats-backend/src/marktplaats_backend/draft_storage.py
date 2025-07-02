@@ -431,8 +431,8 @@ def validate_draft_for_publishing(draft: DraftListing) -> List[str]:
     
     if not draft.title or len(draft.title.strip()) == 0:
         errors.append("Title is required")
-    elif len(draft.title) > 80:
-        errors.append("Title must be 80 characters or less")
+    elif len(draft.title) > 60:
+        errors.append("Title must be 60 characters or less")
     
     if not draft.description or len(draft.description.strip()) == 0:
         errors.append("Description is required")

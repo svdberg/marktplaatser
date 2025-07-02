@@ -80,6 +80,23 @@ def create_advertisement(title, description, category_id, postcode, price_model,
     print(f"Advertisement creation response status: {response.status_code}")
     print(f"Advertisement creation response body: {response.text}")
     
+    # Handle validation errors more gracefully
+    if response.status_code == 400:
+        try:
+            error_data = response.json()
+            if error_data.get("code") == "validation-failure":
+                details = error_data.get("details", [])
+                error_messages = []
+                for detail in details:
+                    field = detail.get("field", "unknown")
+                    message = detail.get("message", "validation error")
+                    error_messages.append(f"{field}: {message}")
+                raise ValueError("Marktplaats validation error: " + "; ".join(error_messages))
+            else:
+                raise ValueError(f"Marktplaats API error: {error_data}")
+        except (ValueError, KeyError):
+            raise ValueError(f"Advertisement creation failed with status {response.status_code}: {response.text}")
+    
     response.raise_for_status()
     return response.json()
 
@@ -224,8 +241,8 @@ def validate_advertisement_data(listing_data, postcode, price_model):
     # Check required fields
     if not listing_data.get('title'):
         errors.append("Title is required")
-    elif len(listing_data['title']) > 80:
-        errors.append("Title must be 80 characters or less")
+    elif len(listing_data['title']) > 60:
+        errors.append("Title must be 60 characters or less")
         
     if not listing_data.get('description'):
         errors.append("Description is required")

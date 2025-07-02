@@ -303,7 +303,7 @@ const saveListing = async () => {
       description: form.value.description,
       priceModel: {
         modelType: 'fixed',
-        askingPrice: Math.round(form.value.price * 100) // Convert euros to cents
+        askingPrice: form.value.price // Backend will convert euros to cents
       },
       reserved: form.value.reserved
     }

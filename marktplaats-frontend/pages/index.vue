@@ -1,50 +1,12 @@
 <template>
   <div class="min-h-screen">
     <!-- Header -->
-    <header class="bg-white shadow-sm border-b">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center h-16">
-          <div class="flex items-center">
-            <h1 class="text-xl font-bold text-gray-900">
-              🤖 Marktplaats AI Assistant
-            </h1>
-          </div>
-          <div class="flex items-center space-x-4">
-            <div v-if="userToken" class="text-sm text-gray-600">
-              ✅ Authorized
-            </div>
-            <NuxtLink
-              v-if="userToken"
-              to="/drafts"
-              class="btn btn-secondary"
-            >
-              📝 My Drafts
-            </NuxtLink>
-            <NuxtLink
-              v-if="userToken"
-              to="/listings"
-              class="btn btn-secondary"
-            >
-              📋 My Listings
-            </NuxtLink>
-            <button
-              v-if="!userToken"
-              @click="authorize"
-              class="btn btn-primary"
-            >
-              Authorize with Marktplaats
-            </button>
-            <button
-              v-else
-              @click="logout"
-              class="btn btn-secondary"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    </header>
+    <Header 
+      :user-token="userToken" 
+      current-page="home"
+      @authorize="authorize"
+      @logout="logout"
+    />
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -512,7 +474,7 @@ const publishNow = async () => {
           postcode: postcode.value,
           priceModel: {
             modelType: 'fixed',
-            askingPrice: Math.round(price.value * 100) // Convert euros to cents
+            askingPrice: price.value // Backend will convert euros to cents
           }
         },
         userId: userToken.value,

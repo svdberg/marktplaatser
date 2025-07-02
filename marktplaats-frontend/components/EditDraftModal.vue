@@ -45,7 +45,7 @@
           <input
             v-model="form.title"
             type="text"
-            maxlength="80"
+            maxlength="60"
             required
             class="w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
             :class="{ 'border-red-300': errors.title }"
@@ -357,7 +357,7 @@ const saveDraft = async () => {
       description: form.value.description,
       priceModel: {
         modelType: 'fixed',
-        askingPrice: Math.round(form.value.price * 100) // Convert euros to cents
+        askingPrice: form.value.price // Backend will convert euros to cents
       },
       postcode: form.value.postcode.replace(/\s/g, '') // Remove spaces from postcode
     }

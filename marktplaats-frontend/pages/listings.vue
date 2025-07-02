@@ -1,32 +1,11 @@
 <template>
   <div class="min-h-screen">
     <!-- Header -->
-    <header class="bg-white shadow-sm border-b">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center h-16">
-          <div class="flex items-center space-x-4">
-            <NuxtLink to="/" class="text-primary hover:text-orange-700">
-              ← Back to Home
-            </NuxtLink>
-            <h1 class="text-xl font-bold text-gray-900">
-              📋 My Listings
-            </h1>
-          </div>
-          <div class="flex items-center space-x-4">
-            <div v-if="userToken" class="text-sm text-gray-600">
-              ✅ Authorized
-            </div>
-            <button
-              v-if="userToken"
-              @click="logout"
-              class="btn btn-secondary"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    </header>
+    <Header 
+      :user-token="userToken" 
+      current-page="listings"
+      @logout="logout"
+    />
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -441,9 +420,9 @@ const confirmToggleReserved = async () => {
       reserved: newReservedStatus
     }
     
-    // If unreserving, include the asking price in cents
+    // If unreserving, include the asking price in euros
     if (!newReservedStatus && unreservePrice.value) {
-      requestBody.askingPrice = Math.round(unreservePrice.value * 100) // Convert euros to cents
+      requestBody.askingPrice = unreservePrice.value // Backend will convert euros to cents
     }
     
     const response = await fetch(`${config.public.apiBaseUrl}/manage-advertisement/${listingId}?user_id=${userToken.value}`, {

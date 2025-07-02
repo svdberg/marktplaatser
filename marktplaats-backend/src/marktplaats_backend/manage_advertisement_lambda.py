@@ -114,6 +114,19 @@ def lambda_handler(event, context):
                 reserved = body.get('reserved')
                 asking_price = body.get('askingPrice')  # For unreserving
                 
+                # Convert prices from euros to cents (Marktplaats API expects cents)
+                if price_model and "askingPrice" in price_model:
+                    # Convert euros to cents (multiply by 100)
+                    euro_price = price_model["askingPrice"]
+                    price_model["askingPrice"] = int(euro_price * 100)
+                    print(f"Converted price_model askingPrice from {euro_price} euros to {price_model['askingPrice']} cents")
+                
+                if asking_price is not None:
+                    # Convert euros to cents (multiply by 100)
+                    euro_price = asking_price
+                    asking_price = int(euro_price * 100)
+                    print(f"Converted askingPrice from {euro_price} euros to {asking_price} cents")
+                
                 print(f"Extracted fields:")
                 print(f"  - title: {title}")
                 print(f"  - description: {description}")
