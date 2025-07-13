@@ -127,17 +127,35 @@ Return as JSON:
     messages = [{"role": "user", "content": content}]
 
     try:
-        response = bedrock_runtime.invoke_model(
-            modelId="eu.anthropic.claude-3-5-sonnet-20240620-v1:0",
-            body=json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "messages": messages,
-                "max_tokens": 1000,
-                "temperature": 0.3
-            }),
-            contentType="application/json",
-            accept="application/json"
-        )
+        import time
+        import random
+        
+        # Add exponential backoff for throttling
+        max_retries = 3
+        base_delay = 2
+        
+        for attempt in range(max_retries + 1):
+            try:
+                response = bedrock_runtime.invoke_model(
+                    modelId="eu.anthropic.claude-3-5-sonnet-20240620-v1:0",
+                    body=json.dumps({
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "messages": messages,
+                        "max_tokens": 1000,
+                        "temperature": 0.3
+                    }),
+                    contentType="application/json",
+                    accept="application/json"
+                )
+                break  # Success, exit retry loop
+            except Exception as e:
+                if "ThrottlingException" in str(e) and attempt < max_retries:
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    print(f"⏳ Vision analysis throttling, waiting {delay:.1f}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(delay)
+                    continue
+                else:
+                    raise  # Re-raise if not throttling or max retries reached
 
         body = response["body"].read().decode("utf-8")
         parsed = json.loads(body)
@@ -240,6 +258,7 @@ Return as JSON:
             }
         )
         
+        print(f"🔍 Knowledge Base response: {response}")
         generated_text = response['output']['text']
         
         # Parse JSON from response
@@ -250,11 +269,11 @@ Return as JSON:
             return category_info
         else:
             print("⚠️  Could not parse category information from Knowledge Base")
-            return {"best_category": {"id": 0, "name": "Algemeen", "confidence": "low"}}
+            return {"best_category": {"id": 1953, "name": "Sport en Fitness", "confidence": "low"}}
             
     except Exception as e:
         print(f"❌ Error querying Knowledge Base: {e}")
-        return {"best_category": {"id": 0, "name": "Algemeen", "confidence": "low"}}
+        return {"best_category": {"id": 1953, "name": "Sport en Fitness", "confidence": "low"}}
 
 
 def generate_final_listing_with_context(image_data: bytes,
@@ -316,17 +335,35 @@ Return as JSON:
     messages = [{"role": "user", "content": content}]
 
     try:
-        response = bedrock_runtime.invoke_model(
-            modelId="eu.anthropic.claude-3-5-sonnet-20240620-v1:0",
-            body=json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "messages": messages,
-                "max_tokens": 1500,
-                "temperature": 0.5
-            }),
-            contentType="application/json",
-            accept="application/json"
-        )
+        import time
+        import random
+        
+        # Add exponential backoff for throttling
+        max_retries = 3
+        base_delay = 2
+        
+        for attempt in range(max_retries + 1):
+            try:
+                response = bedrock_runtime.invoke_model(
+                    modelId="eu.anthropic.claude-3-5-sonnet-20240620-v1:0",
+                    body=json.dumps({
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "messages": messages,
+                        "max_tokens": 1500,
+                        "temperature": 0.5
+                    }),
+                    contentType="application/json",
+                    accept="application/json"
+                )
+                break  # Success, exit retry loop
+            except Exception as e:
+                if "ThrottlingException" in str(e) and attempt < max_retries:
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    print(f"⏳ Throttling detected, waiting {delay:.1f}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(delay)
+                    continue
+                else:
+                    raise  # Re-raise if not throttling or max retries reached
 
         body = response["body"].read().decode("utf-8")
         parsed = json.loads(body)
@@ -338,6 +375,10 @@ Return as JSON:
             # Parse JSON from response
             listing_data = extract_json_from_response(text)
             if listing_data:
+                # Ensure categoryId is valid and present
+                if not listing_data.get('categoryId') or listing_data.get('categoryId') == 0:
+                    listing_data['categoryId'] = best_category.get('id', 1953)
+                    listing_data['category'] = best_category.get('name', 'Sport en Fitness')
                 print(f"✅ Generated final listing: {listing_data.get('title', 'Unknown')}")
                 return listing_data
             else:
@@ -389,11 +430,16 @@ def extract_json_from_response(content: str) -> Dict[str, Any]:
 def create_fallback_listing(product_details: Dict[str, Any], category: Dict[str, Any]) -> Dict[str, Any]:
     """Create a fallback listing if JSON parsing fails."""
     
+    # Ensure we have a valid categoryId - use a safe fallback category
+    category_id = category.get('id', 1953)  # Default to Skateboarden en Longboarden as fallback
+    if not category_id or category_id == 0:
+        category_id = 1953  # Always use a valid category ID
+    
     return {
         "title": f"{product_details.get('product_type', 'Product')} te koop",
         "description": product_details.get('overall_description', 'Product te koop in goede staat.'),
-        "categoryId": category.get('id', 0),
-        "category": category.get('name', 'Algemeen'),
+        "categoryId": category_id,
+        "category": category.get('name', 'Sport en Fitness'),
         "attributes": {
             "condition": product_details.get('condition', 'Gebruikt'),
             "brand": product_details.get('brand', ''),

@@ -34,6 +34,9 @@ provider:
         - Effect: Allow
           Action:
             - bedrock:InvokeModel
+            - bedrock:RetrieveAndGenerate
+            - bedrock:GetInferenceProfile
+            - bedrock:Retrieve
             - bedrock-agent-runtime:RetrieveAndGenerate
             - bedrock-agent-runtime:Retrieve
           Resource: "*"
