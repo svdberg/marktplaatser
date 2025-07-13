@@ -37,6 +37,10 @@
     @apply bg-green-600 text-white hover:bg-green-700 focus:ring-green-500;
   }
   
+  .btn-outline {
+    @apply border-2 border-gray-300 text-gray-700 bg-transparent hover:bg-gray-50 focus:ring-gray-500;
+  }
+  
   .card {
     @apply bg-white rounded-lg shadow-md p-6;
   }

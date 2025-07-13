@@ -94,6 +94,7 @@ def lambda_handler(event, context):
                 
                 try:
                     body = json.loads(event['body'])
+                    print(f"PATCH request body received: {body}")
                 except json.JSONDecodeError:
                     return {
                         "statusCode": 400,
@@ -113,8 +114,27 @@ def lambda_handler(event, context):
                 reserved = body.get('reserved')
                 asking_price = body.get('askingPrice')  # For unreserving
                 
+                # Convert prices from euros to cents (Marktplaats API expects cents)
+                if price_model and "askingPrice" in price_model:
+                    # Convert euros to cents (multiply by 100)
+                    euro_price = price_model["askingPrice"]
+                    price_model["askingPrice"] = int(euro_price * 100)
+                    print(f"Converted price_model askingPrice from {euro_price} euros to {price_model['askingPrice']} cents")
+                
+                if asking_price is not None:
+                    # Convert euros to cents (multiply by 100)
+                    euro_price = asking_price
+                    asking_price = int(euro_price * 100)
+                    print(f"Converted askingPrice from {euro_price} euros to {asking_price} cents")
+                
+                print(f"Extracted fields:")
+                print(f"  - title: {title}")
+                print(f"  - description: {description}")
+                print(f"  - reserved: {reserved} (type: {type(reserved)})")
+                print(f"  - asking_price: {asking_price}")
+                
                 # Validate title length if provided
-                if title is not None and len(title) > 80:
+                if title is not None and len(title) > 60:
                     return {
                         "statusCode": 400,
                         "headers": {
@@ -122,10 +142,11 @@ def lambda_handler(event, context):
                             "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
                             "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                         },
-                        "body": json.dumps({"error": "Title must be 80 characters or less"})
+                        "body": json.dumps({"error": "Title must be 60 characters or less"})
                     }
                 
                 # Handle reserved status separately if provided
+                reserved_result = None
                 if reserved is not None:
                     if not isinstance(reserved, bool):
                         return {
@@ -138,8 +159,15 @@ def lambda_handler(event, context):
                             "body": json.dumps({"error": "Reserved status must be a boolean value"})
                         }
                     
+                    # When unreserving (reserved=False) and no explicit asking_price provided,
+                    # try to use asking price from priceModel if available
+                    effective_asking_price = asking_price
+                    if not reserved and not asking_price and price_model and 'askingPrice' in price_model:
+                        effective_asking_price = price_model['askingPrice']
+                        print(f"Using askingPrice from priceModel for unreserving: {effective_asking_price}")
+                    
                     # Update reserved status first
-                    result = toggle_advertisement_reserved_status(advertisement_id, user_id, reserved, asking_price)
+                    reserved_result = toggle_advertisement_reserved_status(advertisement_id, user_id, reserved, effective_asking_price)
                     
                     # If only reserved status was updated, return the result
                     if all(field is None for field in [title, description, price_model, attributes]):
@@ -150,12 +178,13 @@ def lambda_handler(event, context):
                                 "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
                                 "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                             },
-                            "body": json.dumps(result)
+                            "body": json.dumps(reserved_result)
                         }
                 
                 # Update other fields if provided
+                other_fields_result = None
                 if any(field is not None for field in [title, description, price_model, attributes]):
-                    result = update_user_advertisement(
+                    other_fields_result = update_user_advertisement(
                         advertisement_id,
                         user_id,
                         title=title,
@@ -163,9 +192,9 @@ def lambda_handler(event, context):
                         price_model=price_model,
                         attributes=attributes
                     )
-                else:
-                    # If only reserved status was updated, we already handled it above
-                    # If no fields were provided, return an error
+                
+                # Check if any updates were made
+                if reserved_result is None and other_fields_result is None:
                     return {
                         "statusCode": 400,
                         "headers": {
@@ -176,6 +205,9 @@ def lambda_handler(event, context):
                         "body": json.dumps({"error": "At least one field must be provided for update"})
                     }
                 
+                # Return the most relevant result (prefer other fields result over reserved result)
+                final_result = other_fields_result if other_fields_result is not None else reserved_result
+                
                 return {
                     "statusCode": 200,
                     "headers": {
@@ -183,7 +215,7 @@ def lambda_handler(event, context):
                         "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
                         "Access-Control-Allow-Methods": "GET,PATCH,DELETE,OPTIONS"
                     },
-                    "body": json.dumps(result)
+                    "body": json.dumps(final_result)
                 }
                 
             elif http_method == 'DELETE':

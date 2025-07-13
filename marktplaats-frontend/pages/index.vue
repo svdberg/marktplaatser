@@ -1,43 +1,12 @@
 <template>
   <div class="min-h-screen">
     <!-- Header -->
-    <header class="bg-white shadow-sm border-b">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center h-16">
-          <div class="flex items-center">
-            <h1 class="text-xl font-bold text-gray-900">
-              🤖 Marktplaats AI Assistant
-            </h1>
-          </div>
-          <div class="flex items-center space-x-4">
-            <div v-if="userToken" class="text-sm text-gray-600">
-              ✅ Authorized
-            </div>
-            <NuxtLink
-              v-if="userToken"
-              to="/listings"
-              class="btn btn-secondary"
-            >
-              📋 My Listings
-            </NuxtLink>
-            <button
-              v-if="!userToken"
-              @click="authorize"
-              class="btn btn-primary"
-            >
-              Authorize with Marktplaats
-            </button>
-            <button
-              v-else
-              @click="logout"
-              class="btn btn-secondary"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    </header>
+    <Header 
+      :user-token="userToken" 
+      current-page="home"
+      @authorize="authorize"
+      @logout="logout"
+    />
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -108,11 +77,36 @@
           </div>
         </div>
 
-        <!-- Generated Listing -->
+        <!-- Draft Created Successfully -->
         <div v-if="generatedListing" class="card mb-8">
-          <h2 class="text-xl font-semibold text-gray-900 mb-4">
-            📝 Generated Listing
-          </h2>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold text-gray-900">
+              📝 Draft Created Successfully!
+            </h2>
+            <NuxtLink 
+              to="/drafts" 
+              class="btn btn-primary text-sm"
+            >
+              📋 View All Drafts
+            </NuxtLink>
+          </div>
+          
+          <!-- Success Message -->
+          <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <span class="text-green-600 text-lg">✅</span>
+              </div>
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-green-800">
+                  {{ generatedListing.message || 'Your draft listing has been created!' }}
+                </h3>
+                <p class="text-sm text-green-700 mt-1">
+                  You can now review, edit, and publish your listing when ready.
+                </p>
+              </div>
+            </div>
+          </div>
           
           <div class="space-y-4">
             <div>
@@ -199,13 +193,44 @@
               >
             </div>
 
-            <button
-              @click="createAdvertisement"
-              :disabled="!price || !postcode || creating"
-              class="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {{ creating ? '⏳ Creating...' : '🎯 Create Advertisement' }}
-            </button>
+            <!-- Dual Action Buttons -->
+            <div class="space-y-3">
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 class="text-sm font-medium text-blue-800 mb-2">Choose your action:</h3>
+                <div class="space-y-2">
+                  <button
+                    @click="publishNow"
+                    :disabled="!price || !postcode || publishing"
+                    class="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {{ publishing ? '⏳ Publishing...' : '🚀 Publish to Marktplaats Now' }}
+                  </button>
+                  <button
+                    @click="saveDraft"
+                    :disabled="saving"
+                    class="btn btn-secondary w-full"
+                  >
+                    {{ saving ? '⏳ Saving...' : '📝 Save as Draft for Later' }}
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Navigation Options -->
+              <div class="flex space-x-3 pt-2 border-t">
+                <NuxtLink 
+                  to="/drafts" 
+                  class="btn btn-outline flex-1 text-sm"
+                >
+                  📋 View All Drafts
+                </NuxtLink>
+                <button
+                  @click="createAnotherDraft"
+                  class="btn btn-outline flex-1 text-sm"
+                >
+                  ➕ Create Another
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -269,12 +294,13 @@ const selectedFile = ref(null)
 const generatedListing = ref(null)
 const createdAd = ref(null)
 const loading = ref(false)
-const creating = ref(false)
 const loadingMessage = ref('')
 const error = ref(null)
 const price = ref(50)
 const postcode = ref('1234AB')
 const categoryOverride = ref(null)
+const publishing = ref(false)
+const saving = ref(false)
 
 // Check for stored user ID on mount
 onMounted(() => {
@@ -327,6 +353,12 @@ const handleFileSelect = (event) => {
 const generateListing = async () => {
   if (!selectedFile.value) return
   
+  // Check if user is authenticated
+  if (!userToken.value) {
+    error.value = 'Please authorize with Marktplaats first'
+    return
+  }
+  
   loading.value = true
   loadingMessage.value = 'Compressing and analyzing image...'
   error.value = null
@@ -348,7 +380,9 @@ const generateListing = async () => {
       console.warn('Compressed image is still quite large:', compressedSize / 1024 / 1024, 'MB')
     }
     
-    // Call generate listing API
+    loadingMessage.value = 'Creating draft listing...'
+    
+    // Call generate listing API with user_id and postcode
     console.log('Calling API:', `${config.public.apiBaseUrl}/generate-listing`)
     
     const response = await fetch(`${config.public.apiBaseUrl}/generate-listing`, {
@@ -357,7 +391,9 @@ const generateListing = async () => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        image: base64.split(',')[1] // Remove data:image/jpeg;base64, prefix
+        image: base64.split(',')[1], // Remove data:image/jpeg;base64, prefix
+        user_id: userToken.value,
+        postcode: postcode.value || '1000AA' // Use entered postcode or default
       })
     })
     
@@ -376,6 +412,7 @@ const generateListing = async () => {
       throw new Error(data.error)
     }
     
+    // Update UI to show draft creation success
     generatedListing.value = data
     
     // Auto-fill the estimated price if available
@@ -383,18 +420,37 @@ const generateListing = async () => {
       price.value = data.estimatedPrice
     }
     
+    loadingMessage.value = 'Draft created successfully!'
+    
   } catch (err) {
     error.value = `Failed to generate listing: ${err.message}`
   } finally {
     loading.value = false
-    loadingMessage.value = ''
+    setTimeout(() => {
+      loadingMessage.value = ''
+    }, 2000) // Keep success message visible for 2 seconds
   }
 }
 
-const createAdvertisement = async () => {
+const createAnotherDraft = () => {
+  // Reset form to create another draft
+  selectedImage.value = null
+  selectedFile.value = null
+  generatedListing.value = null
+  createdAd.value = null
+  error.value = null
+  categoryOverride.value = null
+  
+  // Reset file input
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+const publishNow = async () => {
   if (!generatedListing.value || !price.value || !postcode.value) return
   
-  creating.value = true
+  publishing.value = true
   error.value = null
   
   try {
@@ -418,7 +474,7 @@ const createAdvertisement = async () => {
           postcode: postcode.value,
           priceModel: {
             modelType: 'fixed',
-            askingPrice: price.value
+            askingPrice: price.value // Backend will convert euros to cents
           }
         },
         userId: userToken.value,
@@ -433,11 +489,32 @@ const createAdvertisement = async () => {
     }
     
     createdAd.value = data
+    generatedListing.value = null // Hide the draft options after successful publish
     
   } catch (err) {
-    error.value = `Failed to create advertisement: ${err.message}`
+    error.value = `Failed to publish advertisement: ${err.message}`
   } finally {
-    creating.value = false
+    publishing.value = false
+  }
+}
+
+const saveDraft = async () => {
+  if (!generatedListing.value) return
+  
+  saving.value = true
+  error.value = null
+  
+  try {
+    // The draft is already saved by the AI generation process
+    // This function can be used for additional draft updates if needed
+    
+    // Show success message and navigate to drafts
+    await navigateTo('/drafts')
+    
+  } catch (err) {
+    error.value = `Failed to save draft: ${err.message}`
+  } finally {
+    saving.value = false
   }
 }
 
