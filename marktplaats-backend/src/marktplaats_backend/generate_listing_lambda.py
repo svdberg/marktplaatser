@@ -6,6 +6,7 @@ import boto3
 # Force AWS region to eu-west-1 at the very start
 os.environ['AWS_REGION'] = 'eu-west-1'
 from .bedrock_utils import generate_listing_with_claude_vision
+from .bedrock_rag_utils import generate_listing_with_claude_vision_rag
 from .rekognition_utils import extract_labels_and_text
 from .category_matcher import (
     match_category_name,
@@ -28,38 +29,66 @@ def lambda_handler(event, context):
         # Extract labels and text using Rekognition for additional context
         labels, text = extract_labels_and_text(image_data)
 
-        # Fetch Marktplaats categories first
-        cats = fetch_marktplaats_categories()
-        flat = flatten_categories(cats)
+        # Try RAG approach first if Knowledge Base is configured
+        knowledge_base_id = os.environ.get('TAXONOMY_KNOWLEDGE_BASE_ID')
+        
+        if knowledge_base_id:
+            print(f"🚀 Using RAG with Knowledge Base: {knowledge_base_id}")
+            # Generate listing with RAG - no expensive API calls!
+            listing_data = generate_listing_with_claude_vision_rag(
+                image_data=image_data,
+                rekognition_labels=labels,
+                rekognition_text=text,
+                knowledge_base_id=knowledge_base_id
+            )
+        else:
+            print("⚠️  Falling back to traditional approach - no Knowledge Base configured")
+            # Fallback to expensive API approach
+            cats = fetch_marktplaats_categories()
+            flat = flatten_categories(cats)
+            listing_data = generate_listing_with_claude_vision(
+                image_data=image_data,
+                rekognition_labels=labels,
+                rekognition_text=text,
+                available_categories=flat
+            )
 
-        # Generate listing with Claude vision (much better than Rekognition-only approach)
-        # Pass Rekognition data as additional context for Claude
-        listing_data = generate_listing_with_claude_vision(
-            image_data=image_data,
-            rekognition_labels=labels,
-            rekognition_text=text,
-            available_categories=flat
-        )
-
-        # Find exact category match (should be perfect now)
-        category_match = match_category_name(listing_data.get("category", ""), flat)
-        if not category_match:
-            return {
-                "statusCode": 400,
-                "headers": {
-                    "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
-                    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
-                    "Access-Control-Allow-Methods": "POST,OPTIONS"
-                },
-                "body": json.dumps({
-                    "error": "Could not match category", 
-                    "suggested_category": listing_data.get("category", "")
-                })
+        # Handle category matching based on approach used
+        if knowledge_base_id and 'categoryId' in listing_data:
+            # RAG already provided categoryId, use it directly
+            category_match = {
+                'categoryId': listing_data['categoryId'],
+                'match': listing_data.get('category', '')
             }
+            print(f"✅ RAG provided category: {category_match}")
+        else:
+            # Traditional approach - need to match category name
+            category_match = match_category_name(listing_data.get("category", ""), flat)
+            if not category_match:
+                return {
+                    "statusCode": 400,
+                    "headers": {
+                        "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                        "Access-Control-Allow-Methods": "POST,OPTIONS"
+                    },
+                    "body": json.dumps({
+                        "error": "Could not match category", 
+                        "suggested_category": listing_data.get("category", "")
+                    })
+                }
 
         # Map AI attributes to Marktplaats attributes
         try:
-            mp_attributes = fetch_category_attributes(category_match["categoryId"], flat)
+            # For RAG approach, fetch categories only when needed for attributes
+            if not knowledge_base_id:
+                # We already have flat categories from traditional approach
+                mp_attributes = fetch_category_attributes(category_match["categoryId"], flat)
+            else:
+                # RAG approach - fetch categories just for attribute mapping
+                cats = fetch_marktplaats_categories()
+                flat = flatten_categories(cats)
+                mp_attributes = fetch_category_attributes(category_match["categoryId"], flat)
             mapped_attributes = map_ai_attributes_to_marktplaats(
                 listing_data.get("attributes", {}),
                 mp_attributes,

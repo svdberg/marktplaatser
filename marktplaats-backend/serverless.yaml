@@ -11,6 +11,7 @@ provider:
     MARKTPLAATS_CLIENT_ID: ${env:MARKTPLAATS_CLIENT_ID}
     MARKTPLAATS_CLIENT_SECRET: ${env:MARKTPLAATS_CLIENT_SECRET}
     FRONTEND_DOMAIN: marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com
+    TAXONOMY_KNOWLEDGE_BASE_ID: PORZ8IEECD
   iam:
     role:
       statements:
@@ -33,6 +34,8 @@ provider:
         - Effect: Allow
           Action:
             - bedrock:InvokeModel
+            - bedrock-agent-runtime:RetrieveAndGenerate
+            - bedrock-agent-runtime:Retrieve
           Resource: "*"
         - Effect: Allow
           Action:
