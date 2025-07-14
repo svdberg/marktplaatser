@@ -22,44 +22,186 @@ def generate_listing_with_knowledge_base(image_data: bytes,
                                         rekognition_text: List[str], 
                                         knowledge_base_id: str) -> Dict[str, Any]:
     """
-    Generate listing using hybrid approach: Claude vision + Knowledge Base RAG.
-    
-    This combines the best of both worlds:
-    1. Claude vision analyzes the actual image for detailed product information
-    2. Knowledge Base retrieval finds the most relevant categories
-    3. Claude generates final listing with both image insights and category context
+    Optimized 2-call approach: Vision + RAG
+    1. Claude vision identifies product (SINGLE call)
+    2. Knowledge Base RetrieveAndGenerate with product info
     """
     
-    print("🚀 Starting hybrid Claude vision + Knowledge Base RAG generation...")
+    print("🚀 Starting optimized 2-call RAG generation...")
     
     # Create Bedrock clients
     session = boto3.Session(region_name="eu-west-1")
     bedrock_runtime = session.client("bedrock-runtime")
     bedrock_agent = session.client("bedrock-agent-runtime")
     
-    # Step 1: Use Claude vision to analyze the image and extract product details
-    print("👁️  Step 1: Analyzing image with Claude vision...")
-    product_details = analyze_image_with_claude_vision(image_data, rekognition_labels, rekognition_text, bedrock_runtime)
+    # Only use Rekognition text if available, ignore poor quality labels
+    rekognition_context = ""
+    if rekognition_text:
+        text_content = ' '.join([text.strip() for text in rekognition_text[:3] if len(text.strip()) > 2])
+        if text_content:
+            rekognition_context = f"\nDetected text: {text_content}"
     
-    # Step 2: Use product details to query Knowledge Base for relevant categories
-    print("📚 Step 2: Querying Knowledge Base for relevant categories...")
-    relevant_categories = query_knowledge_base_for_categories(product_details, knowledge_base_id, bedrock_agent)
+    print(f"🔍 Using Rekognition text: {rekognition_text if rekognition_text else 'None'}")
     
-    # Step 3: Generate final listing with both image insights and category context
-    print("🎯 Step 3: Generating final listing with category context...")
-    final_listing = generate_final_listing_with_context(
-        image_data, product_details, relevant_categories, bedrock_runtime
-    )
+    # Step 1: Claude vision - get detailed product analysis
+    print("👁️  Step 1: Claude vision product analysis...")
     
-    # Add RAG metadata
-    final_listing['_rag_metadata'] = {
-        'knowledge_base_used': True,
-        'product_analysis': product_details,
-        'relevant_categories': relevant_categories.get('categories', []),
-        'hybrid_approach': 'claude_vision + knowledge_base_rag'
-    }
+    image_base64 = base64.b64encode(image_data).decode('utf-8')
     
-    return final_listing
+    vision_content = [
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/jpeg",
+                "data": image_base64
+            }
+        },
+        {
+            "type": "text",
+            "text": f"""Analyze this product image for a Marktplaats listing.{rekognition_context}
+
+Describe the product with these details:
+1. Product type (specific: "kitesurfboard", "smartphone", "kinderstoel")
+2. Brand/model if visible 
+3. Color and condition
+4. Key features
+
+Format: "product_type brand model color condition features"
+Examples:
+- "kitesurfboard Flysurfer Radical blauw gebruikt watersport"
+- "smartphone iPhone 12 zwart nieuw electronics"
+- "kinderstoel IKEA hout wit gebruikt verstelbaar"
+
+Return only the product description (max 8 words):"""
+        }
+    ]
+
+    try:
+        # Single vision call
+        response = bedrock_runtime.invoke_model(
+            modelId="eu.anthropic.claude-3-5-sonnet-20240620-v1:0",
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "messages": [{"role": "user", "content": vision_content}],
+                "max_tokens": 50,
+                "temperature": 0.1
+            }),
+            contentType="application/json",
+            accept="application/json"
+        )
+
+        body = response["body"].read().decode("utf-8")
+        parsed = json.loads(body)
+        
+        if isinstance(parsed["content"], list):
+            product_description = "".join(part["text"] for part in parsed["content"] if part["type"] == "text").strip()
+            print(f"✅ Product identified: {product_description}")
+        else:
+            product_description = "unknown product"
+            
+    except Exception as e:
+        print(f"❌ Vision failed: {e}")
+        product_description = "unknown product"
+    
+    # Step 2: Knowledge Base RAG with full listing generation
+    print("📚 Step 2: Knowledge Base RAG listing generation...")
+    
+    try:
+        kb_response = bedrock_agent.retrieve_and_generate(
+            input={
+                'text': f"""Create a complete Dutch Marktplaats listing for: {product_description}
+
+Use your knowledge base to find the exact category and generate:
+
+{{
+  "title": "[Dutch title max 60 chars]",
+  "description": "[Dutch description 2-3 sentences]", 
+  "categoryId": [exact_category_id_from_knowledge_base],
+  "category": "[exact_category_name_from_knowledge_base]",
+  "attributes": {{
+    "condition": "[condition from description]",
+    "brand": "[brand if mentioned]",
+    "color": "[color if mentioned]"
+  }},
+  "estimatedPrice": [realistic_euros],
+  "priceRange": {{"min": [min], "max": [max]}},
+  "priceConfidence": "medium"
+}}
+
+Find specific categories like "Kitesurfen" not "Watersport", "Mobiele telefoons" not "Elektronica"."""
+            },
+            retrieveAndGenerateConfiguration={
+                'type': 'KNOWLEDGE_BASE',
+                'knowledgeBaseConfiguration': {
+                    'knowledgeBaseId': knowledge_base_id,
+                    'modelArn': 'arn:aws:bedrock:eu-west-1:242650470527:inference-profile/eu.anthropic.claude-3-5-sonnet-20240620-v1:0',
+                    'retrievalConfiguration': {
+                        'vectorSearchConfiguration': {
+                            'numberOfResults': 3,  # Fewer for speed
+                            'overrideSearchType': 'SEMANTIC'
+                        }
+                    },
+                    'generationConfiguration': {
+                        'inferenceConfig': {
+                            'textInferenceConfig': {
+                                'maxTokens': 600,
+                                'temperature': 0.2
+                            }
+                        }
+                    }
+                }
+            }
+        )
+        
+        # Extract and parse response
+        kb_text = kb_response['output']['text']
+        print(f"📝 KB response: {kb_text[:200]}...")
+        
+        try:
+            start = kb_text.find('{')
+            end = kb_text.rfind('}') + 1
+            if start >= 0 and end > start:
+                json_str = kb_text[start:end]
+                listing_data = json.loads(json_str)
+                
+                print(f"✅ 2-call RAG listing: {listing_data.get('title', 'Unknown')}")
+                
+                listing_data['_rag_metadata'] = {
+                    'knowledge_base_used': True,
+                    'two_call_approach': True,
+                    'product_identified': product_description,
+                    'category_found': f"{listing_data.get('category', 'Unknown')} ({listing_data.get('categoryId', 0)})"
+                }
+                
+                return listing_data
+        except Exception as json_error:
+            print(f"❌ JSON parsing failed: {json_error}")
+        
+        # Fallback with basic structure
+        return {
+            "title": f"{product_description} te koop",
+            "description": f"Product in goede staat. {product_description}",
+            "categoryId": 1953,
+            "category": "Sport en Fitness", 
+            "attributes": {"condition": "Gebruikt"},
+            "estimatedPrice": 100,
+            "priceRange": {"min": 50, "max": 200},
+            "priceConfidence": "low"
+        }
+        
+    except Exception as e:
+        print(f"❌ Knowledge Base RAG failed: {e}")
+        return {
+            "title": "Product te koop",
+            "description": "Product te koop in goede staat.",
+            "categoryId": 1953,
+            "category": "Sport en Fitness",
+            "attributes": {"condition": "Gebruikt"},
+            "estimatedPrice": 50,
+            "priceRange": {"min": 25, "max": 100},
+            "priceConfidence": "low"
+        }
 
 
 def analyze_image_with_claude_vision(image_data: bytes, 
@@ -130,9 +272,9 @@ Return as JSON:
         import time
         import random
         
-        # Add exponential backoff for throttling
-        max_retries = 3
-        base_delay = 2
+        # Add exponential backoff for throttling - faster for API Gateway timeout
+        max_retries = 2  # Reduce retries for faster response
+        base_delay = 1   # Shorter delays
         
         for attempt in range(max_retries + 1):
             try:
@@ -338,9 +480,9 @@ Return as JSON:
         import time
         import random
         
-        # Add exponential backoff for throttling
-        max_retries = 3
-        base_delay = 2
+        # Add exponential backoff for throttling - faster for API Gateway timeout
+        max_retries = 2  # Reduce retries for faster response
+        base_delay = 1   # Shorter delays
         
         for attempt in range(max_retries + 1):
             try:
