@@ -124,6 +124,7 @@ def lambda_handler(event, context):
                 cats = fetch_marktplaats_categories()
                 flat = flatten_categories(cats)
                 mp_attributes = fetch_category_attributes(category_match["categoryId"], flat)
+
             mapped_attributes = map_ai_attributes_to_marktplaats(
                 listing_data.get("attributes", {}),
                 mp_attributes,
@@ -136,6 +137,8 @@ def lambda_handler(event, context):
             print(f"Error fetching/mapping attributes: {e}")
             # On any other error, continue without attributes
             mapped_attributes = []
+
+        print(f"🔍 Mapped attributes: {mapped_attributes}")
 
         # Validate and sanitize price estimation
         estimated_price = listing_data.get("estimatedPrice")
@@ -199,7 +202,7 @@ def lambda_handler(event, context):
             "priceModel": price_model
         }
         
-        # Create draft listing
+        # Create draft listing and store in DynamoDB
         draft = create_draft_from_ai_generation(
             user_id=marktplaats_user_id,
             ai_result=ai_result,

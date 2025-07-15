@@ -126,7 +126,7 @@
               <div class="flex justify-between items-center text-sm">
                 <div class="flex items-center space-x-2">
                   <span v-if="draft.priceModel?.askingPrice" class="font-medium text-gray-900">
-                    €{{ Math.round(draft.priceModel.askingPrice / 100) }}
+                    €{{ draft.priceModel.askingPrice }}
                   </span>
                   <span v-else class="text-gray-500">No price set</span>
                 </div>

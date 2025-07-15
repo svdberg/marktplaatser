@@ -37,7 +37,7 @@ def generate_listing_with_knowledge_base(image_data: bytes,
     # Only use Rekognition text if available, ignore poor quality labels
     rekognition_context = ""
     if rekognition_text:
-        text_content = ' '.join([text.strip() for text in rekognition_text[:3] if len(text.strip()) > 2])
+        text_content = ' '.join([text.strip() for text in rekognition_text if len(text.strip()) > 2])
         if text_content:
             rekognition_context = f"\nDetected text: {text_content}"
     
