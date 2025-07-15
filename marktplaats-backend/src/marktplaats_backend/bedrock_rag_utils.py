@@ -59,7 +59,7 @@ def generate_listing_with_knowledge_base(image_data: bytes,
         },
         {
             "type": "text",
-            "text": f"""Analyze this product image for a Marktplaats listing.{rekognition_context}
+            "text": f"""Analyze this product image for a Marktplaats listing. The image contains these texts: "{rekognition_context}"
 
 Describe the product with these details:
 1. Product type (specific: "kitesurfboard", "smartphone", "kinderstoel")
@@ -110,26 +110,26 @@ Return only the product description (max 8 words):"""
     try:
         kb_response = bedrock_agent.retrieve_and_generate(
             input={
-                'text': f"""Create a complete Dutch Marktplaats listing for: {product_description}
+                'text': f"""Maak een complete Nederlandse Marktplaats advertentie voor: "{product_description}"
 
-Use your knowledge base to find the exact category and generate:
+Gebruik je kennisbank om de exacte categorie te vinden en genereer:
 
 {{
-  "title": "[Dutch title max 60 chars]",
-  "description": "[Dutch description 2-3 sentences]", 
-  "categoryId": [exact_category_id_from_knowledge_base],
-  "category": "[exact_category_name_from_knowledge_base]",
+  "title": "[Nederlandse titel max 60 karakters]",
+  "description": "[Nederlandse beschrijving 2-3 zinnen]", 
+  "categoryId": [exacte_categorie_id_uit_kennisbank],
+  "category": "[exacte_categorie_naam_uit_kennisbank]",
   "attributes": {{
-    "condition": "[condition from description]",
-    "brand": "[brand if mentioned]",
-    "color": "[color if mentioned]"
+    "conditie": "[conditie uit beschrijving]",
+    "merk": "[merk indien genoemd]",
+    "kleur": "[kleur indien genoemd]"
   }},
-  "estimatedPrice": [realistic_euros],
-  "priceRange": {{"min": [min], "max": [max]}},
+  "estimatedPrice": [realistische_prijs_euros],
+  "priceRange": {{"min": [min_prijs], "max": [max_prijs]}},
   "priceConfidence": "medium"
 }}
 
-Find specific categories like "Kitesurfen" not "Watersport", "Mobiele telefoons" not "Elektronica"."""
+Vind specifieke categorieën zoals "Kitesurfen" niet "Watersport", "Mobiele telefoons" niet "Elektronica"."""
             },
             retrieveAndGenerateConfiguration={
                 'type': 'KNOWLEDGE_BASE',
