@@ -51,7 +51,7 @@
             :class="{ 'border-red-300': errors.title }"
           >
           <p v-if="errors.title" class="text-red-600 text-sm mt-1">{{ errors.title }}</p>
-          <p class="text-gray-500 text-sm mt-1">{{ form.title?.length || 0 }}/80 characters</p>
+          <p class="text-gray-500 text-sm mt-1">{{ form.title?.length || 0 }}/60 characters</p>
         </div>
 
         <!-- Description -->
@@ -218,7 +218,7 @@ onMounted(() => {
 // Computed
 const isFormValid = computed(() => {
   return form.value.title && 
-         form.value.title.length <= 80 &&
+         form.value.title.length <= 60 &&
          form.value.description && 
          form.value.price > 0 &&
          form.value.postcode &&
@@ -265,7 +265,7 @@ const loadDraftDetails = async () => {
     form.value = {
       title: data.title || '',
       description: data.description || '',
-      price: data.priceModel?.askingPrice ? (data.priceModel.askingPrice / 100) : 0,
+      price: data.priceModel?.askingPrice ? data.priceModel.askingPrice : 0,
       postcode: data.postcode || '',
       originalCategoryId: data.categoryId || null,
       originalCategoryName: data.categoryName || 'Unknown Category',
@@ -289,8 +289,8 @@ const validateForm = () => {
   
   if (!form.value.title) {
     errors.value.title = 'Title is required'
-  } else if (form.value.title.length > 80) {
-    errors.value.title = 'Title must be 80 characters or less'
+  } else if (form.value.title.length > 60) {
+    errors.value.title = 'Title must be 60 characters or less'
   }
   
   if (!form.value.description) {
@@ -412,7 +412,7 @@ const saveDraft = async () => {
       description: form.value.description,
       priceModel: {
         modelType: 'fixed',
-        askingPrice: Math.round(form.value.price * 100)
+        askingPrice: form.value.price,
       },
       postcode: form.value.postcode.replace(/\s/g, ''),
       categoryId: form.value.categoryId,
