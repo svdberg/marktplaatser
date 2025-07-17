@@ -7,7 +7,7 @@ from datetime import datetime
 
 # Force AWS region to eu-west-1 at the very start
 os.environ['AWS_REGION'] = 'eu-west-1'
-from .bedrock_utils import generate_listing_with_claude_vision
+from .pinecone_rag_utils import generate_listing_with_pinecone_rag
 from .rekognition_utils import extract_labels_and_text
 from .category_matcher import (
     match_category_name,
@@ -67,17 +67,30 @@ def lambda_handler(event, context):
         cats = fetch_marktplaats_categories()
         flat = flatten_categories(cats)
 
-        # Generate listing with Claude vision (much better than Rekognition-only approach)
-        # Pass Rekognition data as additional context for Claude
-        listing_data = generate_listing_with_claude_vision(
+        # Generate listing with Pinecone RAG (Vision + vector search for categories)
+        # This replaces the old approach with cost-effective Pinecone vector search
+        listing_data = generate_listing_with_pinecone_rag(
             image_data=image_data,
             rekognition_labels=labels,
-            rekognition_text=text,
-            available_categories=flat
+            rekognition_text=text
         )
 
-        # Find exact category match (should be perfect now)
-        category_match = match_category_name(listing_data.get("category", ""), flat)
+        # Pinecone RAG returns categoryId directly, so find category in flat list
+        category_id = listing_data.get("categoryId")
+        category_match = None
+        
+        if category_id:
+            # Convert category_id to int for comparison (Pinecone returns float)
+            category_id_int = int(category_id) if category_id else None
+            
+            # Find the category in the flat list by ID
+            # Note: flat categories use "id" field, not "categoryId"
+            for cat in flat:
+                cat_id = cat.get("id")
+                if cat_id is not None and int(cat_id) == category_id_int:
+                    category_match = cat
+                    break
+        
         if not category_match:
             return {
                 "statusCode": 400,
@@ -87,14 +100,16 @@ def lambda_handler(event, context):
                     "Access-Control-Allow-Methods": "POST,OPTIONS"
                 },
                 "body": json.dumps({
-                    "error": "Could not match category", 
+                    "error": "Could not find category", 
+                    "category_id": category_id,
                     "suggested_category": listing_data.get("category", "")
                 })
             }
 
         # Map AI attributes to Marktplaats attributes
+        # Pinecone RAG generates attributes in Dutch, so we still need to map them to the correct format
         try:
-            mp_attributes = fetch_category_attributes(category_match["categoryId"], flat)
+            mp_attributes = fetch_category_attributes(category_match["id"], flat)
             mapped_attributes = map_ai_attributes_to_marktplaats(
                 listing_data.get("attributes", {}),
                 mp_attributes,
@@ -164,8 +179,8 @@ def lambda_handler(event, context):
         ai_result = {
             "title": listing_data["title"],
             "description": listing_data["description"],
-            "categoryId": category_match["categoryId"],
-            "categoryName": category_match["match"],
+            "categoryId": category_match["id"],
+            "categoryName": category_match["name"],
             "attributes": mapped_attributes,
             "priceModel": price_model
         }
