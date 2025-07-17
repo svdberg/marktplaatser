@@ -22,12 +22,12 @@ def generate_listing_with_knowledge_base(image_data: bytes,
                                         rekognition_text: List[str], 
                                         knowledge_base_id: str) -> Dict[str, Any]:
     """
-    Optimized 2-call approach: Vision + RAG
-    1. Claude vision identifies product (SINGLE call)
-    2. Knowledge Base RetrieveAndGenerate with product info
+    Vision + RAG Split Approach:
+    1. Claude vision generates main listing (title, description, price)
+    2. Knowledge Base finds category and attributes
     """
     
-    print("🚀 Starting optimized 2-call RAG generation...")
+    print("🚀 Starting Vision + RAG split approach...")
     
     # Create Bedrock clients
     session = boto3.Session(region_name="eu-west-1")
@@ -43,8 +43,8 @@ def generate_listing_with_knowledge_base(image_data: bytes,
     
     print(f"🔍 Using Rekognition text: {rekognition_text if rekognition_text else 'None'}")
     
-    # Step 1: Claude vision - get detailed product analysis
-    print("👁️  Step 1: Claude vision product analysis...")
+    # Step 1: Claude vision - generate main listing
+    print("👁️  Step 1: Claude vision for listing generation...")
     
     image_base64 = base64.b64encode(image_data).decode('utf-8')
     
@@ -59,33 +59,30 @@ def generate_listing_with_knowledge_base(image_data: bytes,
         },
         {
             "type": "text",
-            "text": f"""Analyze this product image for a Marktplaats listing. The image contains these texts: "{rekognition_context}"
+            "text": f"""Maak een Nederlandse Marktplaats advertentie voor dit product:{rekognition_context}
 
-Describe the product with these details:
-1. Product type (specific: "kitesurfboard", "smartphone", "kinderstoel")
-2. Brand/model if visible 
-3. Color and condition
-4. Key features
+{{
+  "title": "[Nederlandse titel max 60 karakters]",
+  "description": "[Nederlandse beschrijving 2-3 zinnen]",
+  "product_keywords": "[hoofdproduct type merk kleur conditie]",
+  "estimatedPrice": [realistische_prijs_euros],
+  "priceRange": {{"min": [min_prijs], "max": [max_prijs]}},
+  "priceConfidence": "medium"
+}}
 
-Format: "product_type brand model color condition features"
-Examples:
-- "kitesurfboard Flysurfer Radical blauw gebruikt watersport"
-- "smartphone iPhone 12 zwart nieuw electronics"
-- "kinderstoel IKEA hout wit gebruikt verstelbaar"
-
-Return only the product description (max 8 words):"""
+Geef alleen JSON terug, geen extra tekst."""
         }
     ]
 
     try:
-        # Single vision call
+        # Vision call for main listing
         response = bedrock_runtime.invoke_model(
             modelId="eu.anthropic.claude-3-5-sonnet-20240620-v1:0",
             body=json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
                 "messages": [{"role": "user", "content": vision_content}],
-                "max_tokens": 50,
-                "temperature": 0.1
+                "max_tokens": 800,
+                "temperature": 0.3
             }),
             contentType="application/json",
             accept="application/json"
@@ -95,41 +92,49 @@ Return only the product description (max 8 words):"""
         parsed = json.loads(body)
         
         if isinstance(parsed["content"], list):
-            product_description = "".join(part["text"] for part in parsed["content"] if part["type"] == "text").strip()
-            print(f"✅ Product identified: {product_description}")
+            vision_text = "".join(part["text"] for part in parsed["content"] if part["type"] == "text").strip()
+            
+            # Parse JSON from vision response
+            try:
+                start = vision_text.find('{')
+                end = vision_text.rfind('}') + 1
+                if start >= 0 and end > start:
+                    json_str = vision_text[start:end]
+                    vision_listing = json.loads(json_str)
+                    print(f"✅ Vision listing generated: {vision_listing.get('title', 'N/A')}")
+                else:
+                    raise ValueError("No JSON found")
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"❌ Vision JSON parsing failed: {e}")
+                vision_listing = {"product_keywords": "unknown product"}
         else:
-            product_description = "unknown product"
+            vision_listing = {"product_keywords": "unknown product"}
             
     except Exception as e:
         print(f"❌ Vision failed: {e}")
-        product_description = "unknown product"
+        vision_listing = {"product_keywords": "unknown product"}
     
-    # Step 2: Knowledge Base RAG with full listing generation
-    print("📚 Step 2: Knowledge Base RAG listing generation...")
+    # Step 2: RAG for category and attributes only
+    print("📚 Step 2: RAG for category and attributes...")
+    
+    product_keywords = vision_listing.get('title', 'unknown product')
     
     try:
         kb_response = bedrock_agent.retrieve_and_generate(
             input={
-                'text': f"""Maak een complete Nederlandse Marktplaats advertentie voor: "{product_description}"
+                'text': f"""Product: {product_keywords}
 
-Gebruik je kennisbank om de exacte categorie te vinden en genereer:
+Vind de juiste Marktplaats categorie en attributen uit de kennisbank:
 
 {{
-  "title": "[Nederlandse titel max 60 karakters]",
-  "description": "[Nederlandse beschrijving 2-3 zinnen]", 
-  "categoryId": [exacte_categorie_id_uit_kennisbank],
-  "category": "[exacte_categorie_naam_uit_kennisbank]",
+  "categoryId": [categorie_id],
+  "category": "[categorie_naam]",
   "attributes": {{
-    "conditie": "[conditie uit beschrijving]",
-    "merk": "[merk indien genoemd]",
-    "kleur": "[kleur indien genoemd]"
-  }},
-  "estimatedPrice": [realistische_prijs_euros],
-  "priceRange": {{"min": [min_prijs], "max": [max_prijs]}},
-  "priceConfidence": "medium"
+    "key":"value"
+  }}
 }}
 
-Vind specifieke categorieën zoals "Kitesurfen" niet "Watersport", "Mobiele telefoons" niet "Elektronica"."""
+Geef alleen de categorie en attributen terug."""
             },
             retrieveAndGenerateConfiguration={
                 'type': 'KNOWLEDGE_BASE',
@@ -138,15 +143,15 @@ Vind specifieke categorieën zoals "Kitesurfen" niet "Watersport", "Mobiele tele
                     'modelArn': 'arn:aws:bedrock:eu-west-1:242650470527:inference-profile/eu.anthropic.claude-3-5-sonnet-20240620-v1:0',
                     'retrievalConfiguration': {
                         'vectorSearchConfiguration': {
-                            'numberOfResults': 3,  # Fewer for speed
+                            'numberOfResults': 3,
                             'overrideSearchType': 'SEMANTIC'
                         }
                     },
                     'generationConfiguration': {
                         'inferenceConfig': {
                             'textInferenceConfig': {
-                                'maxTokens': 600,
-                                'temperature': 0.2
+                                'maxTokens': 300,  # Smaller since only category/attributes
+                                'temperature': 0.1
                             }
                         }
                     }
@@ -154,54 +159,57 @@ Vind specifieke categorieën zoals "Kitesurfen" niet "Watersport", "Mobiele tele
             }
         )
         
-        # Extract and parse response
+        # Extract and parse RAG response
         kb_text = kb_response['output']['text']
-        print(f"📝 KB response: {kb_text[:200]}...")
+        print(f"📝 RAG response: {kb_text[:150]}...")
         
+        # Try to parse JSON from RAG
         try:
             start = kb_text.find('{')
             end = kb_text.rfind('}') + 1
             if start >= 0 and end > start:
                 json_str = kb_text[start:end]
-                listing_data = json.loads(json_str)
+                rag_data = json.loads(json_str)
                 
-                print(f"✅ 2-call RAG listing: {listing_data.get('title', 'Unknown')}")
+                # Combine vision listing + RAG category/attributes
+                final_listing = {
+                    **vision_listing,  # title, description, price from vision
+                    **rag_data         # categoryId, category from RAG
+                }
+                # Remove the intermediate product_keywords
+                final_listing.pop('product_keywords', None)
                 
-                listing_data['_rag_metadata'] = {
+                print(f"✅ Vision+RAG listing: {final_listing.get('title', 'Unknown')}")
+                
+                final_listing['_rag_metadata'] = {
                     'knowledge_base_used': True,
-                    'two_call_approach': True,
-                    'product_identified': product_description,
-                    'category_found': f"{listing_data.get('category', 'Unknown')} ({listing_data.get('categoryId', 0)})"
+                    'vision_rag_split': True,
+                    'category_found': f"{final_listing.get('category', 'Unknown')} ({final_listing.get('categoryId', 0)})"
                 }
                 
-                return listing_data
+                return final_listing
         except Exception as json_error:
-            print(f"❌ JSON parsing failed: {json_error}")
+            print(f"❌ RAG JSON parsing failed: {json_error}")
         
-        # Fallback with basic structure
-        return {
-            "title": f"{product_description} te koop",
-            "description": f"Product in goede staat. {product_description}",
+        # Fallback: return vision listing with default category
+        fallback_listing = {
+            **vision_listing,
             "categoryId": 1953,
-            "category": "Sport en Fitness", 
-            "attributes": {"condition": "Gebruikt"},
-            "estimatedPrice": 100,
-            "priceRange": {"min": 50, "max": 200},
-            "priceConfidence": "low"
+            "category": "Sport en Fitness"
         }
+        fallback_listing.pop('product_keywords', None)
+        return fallback_listing
         
     except Exception as e:
         print(f"❌ Knowledge Base RAG failed: {e}")
-        return {
-            "title": "Product te koop",
-            "description": "Product te koop in goede staat.",
+        # Return vision listing with default category if RAG fails
+        fallback_listing = {
+            **vision_listing,
             "categoryId": 1953,
-            "category": "Sport en Fitness",
-            "attributes": {"condition": "Gebruikt"},
-            "estimatedPrice": 50,
-            "priceRange": {"min": 25, "max": 100},
-            "priceConfidence": "low"
+            "category": "Sport en Fitness"
         }
+        fallback_listing.pop('product_keywords', None)
+        return fallback_listing
 
 
 def analyze_image_with_claude_vision(image_data: bytes, 
