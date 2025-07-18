@@ -12,7 +12,7 @@ from pinecone import Pinecone
 
 # Configuration
 PINECONE_API_KEY = os.environ.get('PINECONE_API_KEY')
-INDEX_NAME = "marktplaats-taxonomy"
+INDEX_NAME = "marktplaats-taxonomy-v2"  # Enhanced with attribute data
 EMBEDDING_DIMENSION = 1024
 
 # Force region to eu-west-1
@@ -76,13 +76,23 @@ def search_categories(query_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
             if category_id is not None:
                 category_id = int(category_id)
             
+            # Parse attributes JSON if present
+            attributes_data = {}
+            attributes_json = metadata.get('attributes', '')
+            if attributes_json:
+                try:
+                    attributes_data = json.loads(attributes_json)
+                except (json.JSONDecodeError, TypeError):
+                    attributes_data = {}
+            
             categories.append({
                 'categoryId': category_id,
                 'categoryName': metadata.get('categoryName'),
                 'categoryPath': metadata.get('categoryPath'),
                 'score': match.score,
                 'keywords': metadata.get('keywords', []),
-                'supportsAttributes': metadata.get('supportsAttributes', False)
+                'supportsAttributes': metadata.get('supportsAttributes', False),
+                'attributes': attributes_data  # Enhanced: include attribute structure
             })
         
         return categories
@@ -202,10 +212,44 @@ Geef alleen JSON terug, geen extra tekst."""
         
         print(f"✅ Found category: {category_name} (ID: {category_id}, score: {best_category['score']:.4f})")
         
-        # Step 3: Generate attributes using Claude with category context
-        print("🏷️  Step 3: Generating attributes with category context...")
+        # Step 3: Generate attributes using retrieved attribute structure
+        print("🏷️  Step 3: Generating attributes with retrieved structure...")
         
-        attribute_prompt = f"""Gebaseerd op product "{product_keywords}" in categorie "{category_name}":
+        # Get attribute structure from Pinecone
+        category_attributes = best_category.get('attributes', {})
+        
+        if category_attributes:
+            # Build attribute prompt with actual attribute definitions
+            attr_definitions = []
+            for key, attr_info in category_attributes.items():
+                label = attr_info.get('label', key)
+                values = attr_info.get('values', [])
+                
+                if values:
+                    # Use predefined values
+                    values_str = f"[{'/'.join(values[:5])}]"  # First 5 values
+                    if len(values) > 5:
+                        values_str = values_str[:-1] + "/...]"
+                else:
+                    # No predefined values, generate based on type
+                    values_str = f"[{label} indien van toepassing]"
+                
+                attr_definitions.append(f'    "{key}": "{values_str}"')
+            
+            attribute_prompt = f"""Gebaseerd op product "{product_keywords}" in categorie "{category_name}":
+
+Genereer Nederlandse Marktplaats attributen gebruik makend van de beschikbare attributen:
+
+{{
+  "attributes": {{
+{chr(10).join(attr_definitions)}
+  }}
+}}
+
+Selecteer realistische waarden uit de beschikbare opties. Geef alleen JSON terug."""
+        else:
+            # Fallback to simple generation
+            attribute_prompt = f"""Gebaseerd op product "{product_keywords}" in categorie "{category_name}":
 
 Genereer Nederlandse Marktplaats attributen:
 

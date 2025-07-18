@@ -14,7 +14,7 @@ import time
 
 # Configuration
 PINECONE_API_KEY = os.environ.get('PINECONE_API_KEY')
-INDEX_NAME = "marktplaats-taxonomy"
+INDEX_NAME = "marktplaats-taxonomy-v2"  # Enhanced with attribute data
 EMBEDDING_DIMENSION = 1024
 BATCH_SIZE = 100  # Pinecone batch size limit
 MAX_WORKERS = 5   # Concurrent embedding generation
@@ -92,10 +92,51 @@ def prepare_vector_data(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]
             clean_category_name = str(category_name) if category_name else "Unknown"
             clean_category_path = str(category_path) if category_path else ""
             
-            # Create searchable text combining all relevant fields
+            # Process attributes for storage (compact format for Pinecone 40KB limit)
+            attributes_info = []
+            attributes_compact = {}  # More compact format
+            
+            if doc.get('attributes'):
+                for attr in doc['attributes']:
+                    key = attr.get('key', '')
+                    # Store compact attribute info
+                    attributes_compact[key] = {
+                        'label': attr.get('label', ''),
+                        'type': attr.get('type', 'STRING'),
+                        'mandatory': attr.get('mandatory', False),
+                        'values': attr.get('predefinedValues', [])[:10],  # Limit to first 10 values
+                        'group': attr.get('group', '')
+                    }
+                    
+                    # Keep full format for searchable text
+                    attr_info = {
+                        'key': key,
+                        'label': attr.get('label', ''),
+                        'type': attr.get('type', 'STRING'),
+                        'mandatory': attr.get('mandatory', False),
+                        'searchable': attr.get('searchable', False),
+                        'group': attr.get('group', ''),
+                        'predefinedValues': attr.get('predefinedValues', []),
+                        'maxLength': attr.get('maxLength', '')
+                    }
+                    attributes_info.append(attr_info)
+            
+            # Create searchable text combining all relevant fields INCLUDING attributes
             searchable_text = f"{clean_category_name} {clean_category_path} {clean_description}"
             if clean_keywords:
                 searchable_text += f" {' '.join(clean_keywords)}"
+            
+            # Add attribute information to searchable text
+            if attributes_info:
+                attr_text = []
+                for attr in attributes_info:
+                    attr_text.append(f"{attr['label']} ({attr['key']})")
+                    if attr['predefinedValues']:
+                        attr_text.extend(attr['predefinedValues'][:5])  # First 5 values
+                searchable_text += f" {' '.join(attr_text)}"
+            
+            # Convert attributes to JSON string for Pinecone storage
+            attributes_json = json.dumps(attributes_compact) if attributes_compact else ""
             
             vector_data = {
                 'id': f"category_{category_id}",
@@ -108,7 +149,8 @@ def prepare_vector_data(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]
                     'description': clean_description,
                     'level': int(doc.get('level', 2)),
                     'supportsAttributes': bool(doc.get('supportsAttributes', False)),
-                    'attributeCount': int(doc.get('attributeCount', 0))
+                    'attributeCount': int(doc.get('attributeCount', 0)),
+                    'attributes': attributes_json  # Store attributes as JSON string
                 }
             }
             
