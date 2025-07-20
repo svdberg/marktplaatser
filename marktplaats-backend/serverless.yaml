@@ -13,6 +13,7 @@ provider:
     FRONTEND_DOMAIN: marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com
     PINECONE_API_KEY: ${env:PINECONE_API_KEY}
     PINECONE_ENVIRONMENT: ${env:PINECONE_ENVIRONMENT, 'us-east-1'}
+
   iam:
     role:
       statements:
@@ -35,6 +36,11 @@ provider:
         - Effect: Allow
           Action:
             - bedrock:InvokeModel
+            - bedrock:RetrieveAndGenerate
+            - bedrock:GetInferenceProfile
+            - bedrock:Retrieve
+            - bedrock-agent-runtime:RetrieveAndGenerate
+            - bedrock-agent-runtime:Retrieve
           Resource: "*"
         - Effect: Allow
           Action:

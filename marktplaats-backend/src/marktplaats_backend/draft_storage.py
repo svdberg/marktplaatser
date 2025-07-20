@@ -269,6 +269,13 @@ def update_draft(draft_id: str, user_id: str, updates: Dict[str, Any]) -> Option
     if not existing_draft:
         return None
     
+    # Handle category changes - clear attributes when category changes
+    if 'categoryId' in updates:
+        new_category_id = updates['categoryId']
+        if existing_draft.category_id != new_category_id:
+            print(f"Category changed from {existing_draft.category_id} to {new_category_id}, clearing attributes")
+            updates['attributes'] = []
+    
     try:
         # Build update expression with reserved keyword handling
         update_expression = "SET updatedAt = :updated_at"

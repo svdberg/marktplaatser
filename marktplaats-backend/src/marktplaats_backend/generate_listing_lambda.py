@@ -7,7 +7,9 @@ from datetime import datetime
 
 # Force AWS region to eu-west-1 at the very start
 os.environ['AWS_REGION'] = 'eu-west-1'
+
 from .pinecone_rag_utils import generate_listing_with_pinecone_rag
+
 from .rekognition_utils import extract_labels_and_text
 from .category_matcher import (
     match_category_name,
@@ -104,12 +106,31 @@ def lambda_handler(event, context):
                     "category_id": category_id,
                     "suggested_category": listing_data.get("category", "")
                 })
+
             }
+            print(f"✅ RAG provided category: {category_match}")
+        else:
+            # Traditional approach - need to match category name
+            category_match = match_category_name(listing_data.get("category", ""), flat)
+            if not category_match:
+                return {
+                    "statusCode": 400,
+                    "headers": {
+                        "Access-Control-Allow-Origin": "http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com",
+                        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent",
+                        "Access-Control-Allow-Methods": "POST,OPTIONS"
+                    },
+                    "body": json.dumps({
+                        "error": "Could not match category", 
+                        "suggested_category": listing_data.get("category", "")
+                    })
+                }
 
         # Map AI attributes to Marktplaats attributes
         # Pinecone RAG generates attributes in Dutch, so we still need to map them to the correct format
         try:
             mp_attributes = fetch_category_attributes(category_match["id"], flat)
+
             mapped_attributes = map_ai_attributes_to_marktplaats(
                 listing_data.get("attributes", {}),
                 mp_attributes,
@@ -122,6 +143,8 @@ def lambda_handler(event, context):
             print(f"Error fetching/mapping attributes: {e}")
             # On any other error, continue without attributes
             mapped_attributes = []
+
+        print(f"🔍 Mapped attributes: {mapped_attributes}")
 
         # Validate and sanitize price estimation
         estimated_price = listing_data.get("estimatedPrice")
@@ -185,7 +208,7 @@ def lambda_handler(event, context):
             "priceModel": price_model
         }
         
-        # Create draft listing
+        # Create draft listing and store in DynamoDB
         draft = create_draft_from_ai_generation(
             user_id=marktplaats_user_id,
             ai_result=ai_result,
