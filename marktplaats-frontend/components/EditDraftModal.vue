@@ -211,12 +211,22 @@ onMounted(() => {
 
 // Computed
 const isFormValid = computed(() => {
-  return form.value.title && 
+  // Basic validation
+  const basicValid = form.value.title && 
          form.value.title.length <= 60 &&
          form.value.description && 
          form.value.priceModel?.askingPrice > 0 &&
          form.value.postcode &&
          Object.keys(errors.value).filter(key => key !== 'general').length === 0
+  
+  // Additional validation for bidding model
+  if (form.value.priceModel?.modelType === 'bidding') {
+    return basicValid && 
+           form.value.priceModel.minimalBid > 0 &&
+           form.value.priceModel.minimalBid < form.value.priceModel.askingPrice
+  }
+  
+  return basicValid
 })
 
 // Methods
@@ -298,10 +308,15 @@ const validateForm = () => {
   
   // Validate bidding-specific fields if bidding model
   if (form.value.priceModel?.modelType === 'bidding') {
+    // According to official API: both askingPrice and minimalBid are REQUIRED for bidding
+    if (!form.value.priceModel.askingPrice || form.value.priceModel.askingPrice <= 0) {
+      errors.value.askingPrice = 'Asking price is required for bidding and must be greater than 0'
+    }
+    
     if (!form.value.priceModel.minimalBid || form.value.priceModel.minimalBid <= 0) {
-      errors.value.minimalBid = 'Minimum bid increment must be greater than 0'
+      errors.value.minimalBid = 'Minimal bid is required for bidding and must be greater than 0'
     } else if (form.value.priceModel.minimalBid >= form.value.priceModel.askingPrice) {
-      errors.value.minimalBid = 'Minimum bid increment must be less than starting bid'
+      errors.value.minimalBid = 'Minimal bid must be less than asking price'
     }
   }
   

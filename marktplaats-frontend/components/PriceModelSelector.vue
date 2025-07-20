@@ -87,12 +87,14 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
+// Flag to prevent infinite update loops
+const isUpdatingFromParent = ref(false)
+
 // Internal price model to manage the complete state
 const internalPriceModel = ref({
   modelType: 'fixed',
   askingPrice: 0,
-  minimalBid: 1,
-  auctionDuration: 7,
+  minimalBid: 1, // Only used for bidding
   ...props.modelValue
 })
 
@@ -101,14 +103,13 @@ const selectedModel = computed({
   get: () => internalPriceModel.value.modelType || 'fixed',
   set: (value) => {
     if (value === 'bidding') {
-      // When switching to bidding, preserve askingPrice as starting bid
-      // and set smart defaults
+      // When switching to bidding, according to official API specification
+      // Both askingPrice and minimalBid are REQUIRED
       const currentPrice = internalPriceModel.value.askingPrice || 0
       internalPriceModel.value = {
         modelType: 'bidding',
         askingPrice: currentPrice,
-        minimalBid: Math.max(1, Math.floor(currentPrice * 0.05)), // 5% of asking price or minimum €1
-        auctionDuration: 7
+        minimalBid: Math.max(1, Math.floor(currentPrice * 0.10)) // 10% of asking price or minimum €1
       }
     } else {
       // When switching to fixed, preserve the price
@@ -124,16 +125,27 @@ const selectedModel = computed({
   }
 })
 
-// Watch for external updates
+// Watch for external updates (prevent infinite loops)
 watch(() => props.modelValue, (newValue) => {
-  if (newValue) {
-    internalPriceModel.value = { ...internalPriceModel.value, ...newValue }
+  if (newValue && !isUpdatingFromParent.value) {
+    isUpdatingFromParent.value = true
+    internalPriceModel.value = { 
+      modelType: 'fixed',
+      askingPrice: 0,
+      minimalBid: 1, // Only used for bidding
+      ...newValue 
+    }
+    nextTick(() => {
+      isUpdatingFromParent.value = false
+    })
   }
 }, { deep: true, immediate: true })
 
-// Watch internal changes and emit
+// Watch internal changes and emit (only when not updating from parent)
 watch(internalPriceModel, (newValue) => {
-  emit('update:modelValue', { ...newValue })
+  if (!isUpdatingFromParent.value) {
+    emit('update:modelValue', { ...newValue })
+  }
 }, { deep: true })
 
 // Initialize with suggested model if provided and no current model type
