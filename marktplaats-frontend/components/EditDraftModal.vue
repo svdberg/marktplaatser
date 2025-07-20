@@ -69,21 +69,13 @@
           <p v-if="errors.description" class="text-red-600 text-sm mt-1">{{ errors.description }}</p>
         </div>
 
-        <!-- Price -->
+        <!-- Pricing Model -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Price (€) *
-          </label>
-          <input
-            v-model.number="form.price"
-            type="number"
-            min="0.01"
-            step="0.01"
-            required
-            class="w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-            :class="{ 'border-red-300': errors.price }"
-          >
-          <p v-if="errors.price" class="text-red-600 text-sm mt-1">{{ errors.price }}</p>
+          <PriceModelSelector
+            v-model="form.priceModel"
+            :suggested-model="form.suggestedPricingModel"
+            :errors="errors"
+          />
         </div>
 
         <!-- Postcode -->
@@ -178,6 +170,7 @@
 
 <script setup>
 import CategorySelector from '~/components/CategorySelector.vue'
+import PriceModelSelector from '~/components/PriceModelSelector.vue'
 
 const props = defineProps({
   draft: {
@@ -194,7 +187,8 @@ const config = useRuntimeConfig()
 const form = ref({
   title: '',
   description: '',
-  price: 0,
+  priceModel: { modelType: 'fixed', askingPrice: 0 },
+  suggestedPricingModel: 'fixed',
   postcode: '',
   originalCategoryId: null,
   originalCategoryName: '',
@@ -220,7 +214,7 @@ const isFormValid = computed(() => {
   return form.value.title && 
          form.value.title.length <= 60 &&
          form.value.description && 
-         form.value.price > 0 &&
+         form.value.priceModel?.askingPrice > 0 &&
          form.value.postcode &&
          Object.keys(errors.value).filter(key => key !== 'general').length === 0
 })
@@ -265,7 +259,8 @@ const loadDraftDetails = async () => {
     form.value = {
       title: data.title || '',
       description: data.description || '',
-      price: data.priceModel?.askingPrice ? data.priceModel.askingPrice : 0,
+      priceModel: data.priceModel || { modelType: 'fixed', askingPrice: 0 },
+      suggestedPricingModel: data.suggestedPricingModel || 'fixed',
       postcode: data.postcode || '',
       originalCategoryId: data.categoryId || null,
       originalCategoryName: data.categoryName || 'Unknown Category',
@@ -297,8 +292,17 @@ const validateForm = () => {
     errors.value.description = 'Description is required'
   }
   
-  if (!form.value.price || form.value.price <= 0) {
+  if (!form.value.priceModel?.askingPrice || form.value.priceModel.askingPrice <= 0) {
     errors.value.price = 'Price must be greater than 0'
+  }
+  
+  // Validate bidding-specific fields if bidding model
+  if (form.value.priceModel?.modelType === 'bidding') {
+    if (!form.value.priceModel.minimalBid || form.value.priceModel.minimalBid <= 0) {
+      errors.value.minimalBid = 'Minimum bid increment must be greater than 0'
+    } else if (form.value.priceModel.minimalBid >= form.value.priceModel.askingPrice) {
+      errors.value.minimalBid = 'Minimum bid increment must be less than starting bid'
+    }
   }
   
   if (!form.value.postcode) {
@@ -355,10 +359,7 @@ const saveDraft = async () => {
     const updateData = {
       title: form.value.title,
       description: form.value.description,
-      priceModel: {
-        modelType: 'fixed',
-        askingPrice: form.value.price // Backend will convert euros to cents
-      },
+      priceModel: form.value.priceModel, // Send complete price model
       postcode: form.value.postcode.replace(/\s/g, '') // Remove spaces from postcode
     }
     
@@ -410,10 +411,7 @@ const saveDraft = async () => {
       ...props.draft,
       title: form.value.title,
       description: form.value.description,
-      priceModel: {
-        modelType: 'fixed',
-        askingPrice: form.value.price,
-      },
+      priceModel: form.value.priceModel,
       postcode: form.value.postcode.replace(/\s/g, ''),
       categoryId: form.value.categoryId,
       categoryName: form.value.categoryName || data.categoryName || form.value.originalCategoryName

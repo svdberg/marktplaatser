@@ -125,9 +125,16 @@
               <!-- Price and Status -->
               <div class="flex justify-between items-center text-sm">
                 <div class="flex items-center space-x-2">
-                  <span v-if="draft.priceModel?.askingPrice" class="font-medium text-gray-900">
-                    €{{ draft.priceModel.askingPrice }}
-                  </span>
+                  <div v-if="draft.priceModel?.askingPrice" class="flex items-center space-x-1">
+                    <span v-if="draft.priceModel.modelType === 'bidding'" class="text-xl">⚖️</span>
+                    <span v-else class="text-xl">🏷️</span>
+                    <span class="font-medium text-gray-900">
+                      €{{ draft.priceModel.askingPrice }}
+                    </span>
+                    <span v-if="draft.priceModel.modelType === 'bidding'" class="text-xs text-gray-500">
+                      (starting bid)
+                    </span>
+                  </div>
                   <span v-else class="text-gray-500">No price set</span>
                 </div>
                 <div class="flex items-center space-x-1">
