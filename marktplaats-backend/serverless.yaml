@@ -2,7 +2,7 @@ service: marktplaats-backend
 
 provider:
   name: aws
-  runtime: python3.11
+  runtime: python3.9
   region: eu-west-1
   memorySize: 512
   timeout: 30
@@ -11,7 +11,9 @@ provider:
     MARKTPLAATS_CLIENT_ID: ${env:MARKTPLAATS_CLIENT_ID}
     MARKTPLAATS_CLIENT_SECRET: ${env:MARKTPLAATS_CLIENT_SECRET}
     FRONTEND_DOMAIN: marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com
-    TAXONOMY_KNOWLEDGE_BASE_ID: PORZ8IEECD
+    PINECONE_API_KEY: ${env:PINECONE_API_KEY}
+    PINECONE_ENVIRONMENT: ${env:PINECONE_ENVIRONMENT, 'us-east-1'}
+
   iam:
     role:
       statements:
@@ -444,4 +446,7 @@ plugins:
 
 custom:
   pythonRequirements:
-    dockerizePip: true
+    dockerizePip: false
+    slim: true
+    strip: false
+    pythonBin: python3
