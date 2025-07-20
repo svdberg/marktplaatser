@@ -190,12 +190,33 @@ def lambda_handler(event, context):
             # Continue without image if upload fails
             image_url = None
 
-        # Create price model for the draft
+        # Create price model for the draft based on AI suggestion
         price_model = {}
+        suggested_pricing_model = listing_data.get("suggestedPricingModel", "fixed")
+        
         if estimated_price is not None:
+            if suggested_pricing_model == "bidding":
+                # Create bidding model with smart defaults
+                minimal_bid_amount = max(1, int(estimated_price * 0.05))  # 5% of asking price or minimum €1
+                price_model = {
+                    "modelType": "bidding",
+                    "askingPrice": estimated_price,  # Starting bid
+                    "minimalBid": minimal_bid_amount,  # Minimum bid increment
+                    "auctionDuration": 7  # Default 7 days
+                }
+                print(f"💰 Created bidding model: start €{estimated_price}, increment €{minimal_bid_amount}")
+            else:
+                # Default to fixed price model
+                price_model = {
+                    "modelType": "fixed",
+                    "askingPrice": estimated_price  # Store in euros, convert to cents when publishing
+                }
+                print(f"💰 Created fixed price model: €{estimated_price}")
+        else:
+            # No price estimated, create basic structure
             price_model = {
-                "modelType": "fixed",
-                "askingPrice": estimated_price  # Store in euros, convert to cents when publishing
+                "modelType": suggested_pricing_model,
+                "askingPrice": 0
             }
 
         # Build AI result for draft creation
@@ -226,7 +247,9 @@ def lambda_handler(event, context):
             "estimatedPrice": estimated_price,
             "priceRange": price_range,
             "priceConfidence": price_confidence,
-            "message": "Draft listing created successfully! You can edit it in the Drafts section before publishing."
+            "priceModel": price_model,  # Include generated price model
+            "suggestedPricingModel": suggested_pricing_model,  # AI suggestion
+            "message": f"Draft listing created successfully with {suggested_pricing_model} pricing model! You can edit it in the Drafts section before publishing."
         }
 
         return {
