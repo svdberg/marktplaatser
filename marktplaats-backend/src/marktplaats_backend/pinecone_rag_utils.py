@@ -212,8 +212,48 @@ Geef alleen JSON terug, geen extra tekst."""
         
         print(f"✅ Found category: {category_name} (ID: {category_id}, score: {best_category['score']:.4f})")
         
-        # Step 3: Generate attributes using retrieved attribute structure
-        print("🏷️  Step 3: Generating attributes with retrieved structure...")
+        # Step 3: Analyze pricing model suitability
+        print("💰 Step 3: Analyzing pricing model suitability...")
+        
+        # Determine if category is suitable for bidding based on category analysis
+        category_name_lower = category_name.lower()
+        category_path = best_category.get('categoryPath', '').lower()
+        
+        # Categories typically suitable for bidding/auctions
+        bidding_suitable_keywords = [
+            'antiek', 'kunst', 'verzamelen', 'vintage', 'klassiek',
+            'zeldzaam', 'uniek', 'limited', 'exclusief', 'collector',
+            'handgemaakt', 'design', 'kunstwerk', 'sieraden', 'munten',
+            'postzegels', 'boeken', 'platen', 'vinyl', 'memorabilia'
+        ]
+        
+        # Categories typically NOT suitable for bidding
+        bidding_unsuitable_keywords = [
+            'telefoon', 'computer', 'laptop', 'tablet', 'software',
+            'kleding', 'schoenen', 'voeding', 'tickets', 'diensten',
+            'verhuur', 'baan', 'stage', 'cursus', 'training'
+        ]
+        
+        # Analyze category for bidding suitability
+        bidding_score = 0
+        for keyword in bidding_suitable_keywords:
+            if keyword in category_name_lower or keyword in category_path:
+                bidding_score += 1
+        
+        for keyword in bidding_unsuitable_keywords:
+            if keyword in category_name_lower or keyword in category_path:
+                bidding_score -= 2
+        
+        # Determine suggested pricing model
+        if bidding_score > 0:
+            suggested_pricing_model = "bidding"
+            print(f"✨ Suggested pricing model: bidding (score: {bidding_score})")
+        else:
+            suggested_pricing_model = "fixed"
+            print(f"✨ Suggested pricing model: fixed (score: {bidding_score})")
+        
+        # Step 4: Generate attributes using retrieved attribute structure
+        print("🏷️  Step 4: Generating attributes with retrieved structure...")
         
         # Get attribute structure from Pinecone
         category_attributes = best_category.get('attributes', {})
@@ -307,13 +347,15 @@ Geef alleen JSON terug."""
         category_id = 1953
         category_name = "Sport en Fitness"
         attributes = {"conditie": "Gebruikt"}
+        suggested_pricing_model = "fixed"  # Default to fixed for unknown categories
     
     # Combine all results
     final_listing = {
         **vision_listing,
         "categoryId": category_id,
         "category": category_name,
-        "attributes": attributes
+        "attributes": attributes,
+        "suggestedPricingModel": suggested_pricing_model  # Add pricing model suggestion
     }
     
     # Remove intermediate fields
@@ -325,7 +367,12 @@ Geef alleen JSON terug."""
         'vision_pinecone_rag': True,
         'categories_found': len(categories),
         'best_category_score': categories[0]['score'] if categories else 0,
-        'category_found': f"{category_name} ({category_id})"
+        'category_found': f"{category_name} ({category_id})",
+        'pricing_model_analysis': {
+            'suggested_model': suggested_pricing_model,
+            'bidding_score': bidding_score if 'bidding_score' in locals() else 0,
+            'analysis_performed': True
+        }
     }
     
     print(f"✅ Pinecone RAG listing: {final_listing.get('title', 'Unknown')}")

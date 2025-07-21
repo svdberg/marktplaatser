@@ -173,14 +173,13 @@
               </div>
             </div>
 
+            <!-- Pricing Model Selector -->
             <div>
-              <label class="block text-sm font-medium text-gray-700">Price (€)</label>
-              <input
-                v-model.number="price"
-                type="number"
-                min="1"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary"
-              >
+              <PriceModelSelector
+                v-model="priceModel"
+                :suggested-model="generatedListing.suggestedPricingModel"
+                :errors="{}"
+              />
             </div>
 
             <div>
@@ -200,7 +199,7 @@
                 <div class="space-y-2">
                   <button
                     @click="publishNow"
-                    :disabled="!price || !postcode || publishing"
+                    :disabled="!priceModel?.askingPrice || !postcode || publishing"
                     class="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {{ publishing ? '⏳ Publishing...' : '🚀 Publish to Marktplaats Now' }}
@@ -284,6 +283,7 @@
 
 <script setup>
 import { generateUUID } from '~/utils/uuid.js'
+import PriceModelSelector from '~/components/PriceModelSelector.vue'
 
 const config = useRuntimeConfig()
 
@@ -297,6 +297,7 @@ const loading = ref(false)
 const loadingMessage = ref('')
 const error = ref(null)
 const price = ref(50)
+const priceModel = ref({ modelType: 'fixed', askingPrice: 50 })
 const postcode = ref('1234AB')
 const categoryOverride = ref(null)
 const publishing = ref(false)
@@ -415,9 +416,15 @@ const generateListing = async () => {
     // Update UI to show draft creation success
     generatedListing.value = data
     
-    // Auto-fill the estimated price if available
-    if (data.estimatedPrice) {
+    // Auto-fill the price model from AI generation
+    if (data.priceModel) {
+      priceModel.value = { ...data.priceModel }
+      // Also update the legacy price field for backward compatibility
+      price.value = data.priceModel.askingPrice || data.estimatedPrice || 50
+    } else if (data.estimatedPrice) {
+      // Fallback to estimated price if no price model
       price.value = data.estimatedPrice
+      priceModel.value = { modelType: 'fixed', askingPrice: data.estimatedPrice }
     }
     
     loadingMessage.value = 'Draft created successfully!'
@@ -440,6 +447,7 @@ const createAnotherDraft = () => {
   createdAd.value = null
   error.value = null
   categoryOverride.value = null
+  priceModel.value = { modelType: 'fixed', askingPrice: 50 }
   
   // Reset file input
   if (fileInput.value) {
@@ -448,7 +456,7 @@ const createAnotherDraft = () => {
 }
 
 const publishNow = async () => {
-  if (!generatedListing.value || !price.value || !postcode.value) return
+  if (!generatedListing.value || !priceModel.value?.askingPrice || !postcode.value) return
   
   publishing.value = true
   error.value = null
@@ -472,10 +480,7 @@ const publishNow = async () => {
         image: base64.split(',')[1],
         userDetails: {
           postcode: postcode.value,
-          priceModel: {
-            modelType: 'fixed',
-            askingPrice: price.value // Backend will convert euros to cents
-          }
+          priceModel: priceModel.value // Use the complete price model from selector
         },
         userId: userToken.value,
         categoryOverride: categoryOverride.value
@@ -538,6 +543,7 @@ const createAnother = () => {
   error.value = null
   categoryOverride.value = null
   price.value = 50
+  priceModel.value = { modelType: 'fixed', askingPrice: 50 }
   postcode.value = '1234AB'
   
   // Reset file input
