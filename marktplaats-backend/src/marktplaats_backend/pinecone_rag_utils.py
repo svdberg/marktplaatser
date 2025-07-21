@@ -102,14 +102,32 @@ def search_categories(query_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
         return []
 
 
-def generate_listing_with_pinecone_rag(image_data: bytes, 
-                                      rekognition_labels: List[str],
-                                      rekognition_text: List[str]) -> Dict[str, Any]:
+def generate_listing_with_pinecone_rag(images_data: List[bytes] = None,
+                                      image_data: bytes = None, 
+                                      rekognition_labels: List[str] = None,
+                                      rekognition_text: List[str] = None) -> Dict[str, Any]:
     """
     Generate listing using Vision + Pinecone RAG approach.
     1. Claude vision generates main listing (title, description, price)
     2. Pinecone finds relevant categories and attributes
+    
+    Args:
+        images_data: List of image bytes (new multi-image format)
+        image_data: Single image bytes (backward compatibility)
+        rekognition_labels: List of Rekognition labels
+        rekognition_text: List of Rekognition text
     """
+    
+    # Handle backward compatibility
+    if images_data is None and image_data is not None:
+        images_data = [image_data]
+    elif images_data is None:
+        raise ValueError("Either images_data or image_data must be provided")
+    
+    if rekognition_labels is None:
+        rekognition_labels = []
+    if rekognition_text is None:
+        rekognition_text = []
     
     print("🚀 Starting Vision + Pinecone RAG generation...")
     
@@ -127,22 +145,26 @@ def generate_listing_with_pinecone_rag(image_data: bytes,
     print(f"🔍 Using Rekognition text: {rekognition_text if rekognition_text else 'None'}")
     
     # Step 1: Claude vision - generate main listing
-    print("👁️  Step 1: Claude vision for listing generation...")
+    print(f"👁️  Step 1: Claude vision for listing generation with {len(images_data)} image(s)...")
     
-    image_base64 = base64.b64encode(image_data).decode('utf-8')
+    # Build vision content with multiple images
+    vision_content = []
     
-    vision_content = [
-        {
+    # Add all images to the request
+    for i, img_data in enumerate(images_data):
+        image_base64 = base64.b64encode(img_data).decode('utf-8')
+        vision_content.append({
             "type": "image",
             "source": {
                 "type": "base64",
                 "media_type": "image/jpeg",
                 "data": image_base64
             }
-        },
-        {
-            "type": "text",
-            "text": f"""Maak een Nederlandse Marktplaats advertentie voor dit product:{rekognition_context}
+        })
+    
+    # Add the text prompt
+    if len(images_data) == 1:
+        prompt_text = f"""Maak een Nederlandse Marktplaats advertentie voor dit product:{rekognition_context}
 
 {{
   "title": "[Nederlandse titel max 60 karakters]",
@@ -154,8 +176,26 @@ def generate_listing_with_pinecone_rag(image_data: bytes,
 }}
 
 Geef alleen JSON terug, geen extra tekst."""
-        }
-    ]
+    else:
+        prompt_text = f"""Maak een Nederlandse Marktplaats advertentie voor dit product gebaseerd op alle {len(images_data)} afbeeldingen:{rekognition_context}
+
+Analyseer alle afbeeldingen samen om een complete beschrijving te maken. Gebruik informatie uit alle foto's voor een betere advertentie.
+
+{{
+  "title": "[Nederlandse titel max 60 karakters]",
+  "description": "[Nederlandse beschrijving 2-3 zinnen, gebruik details uit alle foto's]",
+  "product_keywords": "[hoofdproduct type merk kleur conditie staat details]",
+  "estimatedPrice": [realistische_prijs_euros],
+  "priceRange": {{"min": [min_prijs], "max": [max_prijs]}},
+  "priceConfidence": "medium"
+}}
+
+Geef alleen JSON terug, geen extra tekst."""
+    
+    vision_content.append({
+        "type": "text",
+        "text": prompt_text
+    })
 
     try:
         # Vision call for main listing
@@ -365,6 +405,8 @@ Geef alleen JSON terug."""
     final_listing['_rag_metadata'] = {
         'pinecone_used': True,
         'vision_pinecone_rag': True,
+        'images_processed': len(images_data),
+        'multi_image_processing': len(images_data) > 1,
         'categories_found': len(categories),
         'best_category_score': categories[0]['score'] if categories else 0,
         'category_found': f"{category_name} ({category_id})",
@@ -418,7 +460,7 @@ def generate_listing_with_knowledge_base(image_data: bytes,
     """
     
     return generate_listing_with_pinecone_rag(
-        image_data=image_data,
+        images_data=[image_data],
         rekognition_labels=rekognition_labels,
         rekognition_text=rekognition_text
     )
