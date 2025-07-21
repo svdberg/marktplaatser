@@ -489,14 +489,14 @@ const uploadNewImagesToS3 = async (userToken) => {
       // Compress image  
       const compressedBase64 = await resizeAndCompressImage(imageObj.file, 1024, 1024, 0.8)
       
-      // For now, we'll use a simple approach by calling our existing upload logic
-      // We'll send the images to a draft-specific upload endpoint that we'll create
-      const response = await fetch(`${config.public.apiBaseUrl}/drafts/${props.draft.draftId}/upload-image?user_id=${userToken}`, {
+      // Use the new draft image upload endpoint  
+      const response = await fetch(`${config.public.apiBaseUrl}/draft-images/upload?user_id=${userToken}`, {
         method: 'POST', 
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          draft_id: props.draft.draftId,
           image: compressedBase64.split(',')[1] // Remove data:image/jpeg;base64, prefix
         })
       })

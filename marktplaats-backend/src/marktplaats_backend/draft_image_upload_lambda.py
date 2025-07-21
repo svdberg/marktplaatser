@@ -69,11 +69,6 @@ def lambda_handler(event, context):
                 "body": ""
             }
         
-        # Parse path parameters
-        draft_id = event.get("pathParameters", {}).get("draftId")
-        if not draft_id:
-            return _create_error_response(400, "Draft ID is required")
-        
         # Parse query parameters
         query_params = event.get("queryStringParameters") or {}
         internal_user_id = query_params.get("user_id")
@@ -83,8 +78,13 @@ def lambda_handler(event, context):
         # Parse request body
         try:
             body = json.loads(event["body"])
+            draft_id = body["draft_id"]
             image_base64 = body["image"]
             image_data = base64.b64decode(image_base64)
+            
+            if not draft_id:
+                return _create_error_response(400, "draft_id is required in request body")
+                
         except Exception as e:
             return _create_error_response(400, f"Invalid request format: {str(e)}")
         

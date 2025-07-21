@@ -268,9 +268,25 @@
           </h2>
           <div class="space-y-2 text-green-700">
             <p><strong>Advertisement ID:</strong> {{ createdAd.advertisementId }}</p>
-            <p><strong>Title:</strong> {{ createdAd.advertisement?.title }}</p>
+            <p><strong>Title:</strong> {{ createdAd.title || createdAd.advertisement?.title }}</p>
+            <p v-if="createdAd.imageCount"><strong>Images:</strong> {{ createdAd.imageCount }} uploaded successfully</p>
+            <div v-if="createdAd.imageUrls && createdAd.imageUrls.length > 0" class="space-y-1">
+              <p><strong>Uploaded Images:</strong></p>
+              <div class="flex flex-wrap gap-2">
+                <a
+                  v-for="(imageUrl, index) in createdAd.imageUrls"
+                  :key="index"
+                  :href="imageUrl"
+                  target="_blank"
+                  class="text-primary hover:underline text-sm"
+                >
+                  Image {{ index + 1 }}
+                </a>
+              </div>
+            </div>
+            <!-- Backward compatibility for single image -->
             <a
-              v-if="createdAd.imageUrl"
+              v-else-if="createdAd.imageUrl"
               :href="createdAd.imageUrl"
               target="_blank"
               class="text-primary hover:underline block"
@@ -570,10 +586,14 @@ const publishNow = async () => {
   error.value = null
   
   try {
-    // Use the same compressed images for advertisement creation
-    // For now, use the first image for backward compatibility with publish endpoint
-    const primaryImageFile = selectedImages.value.length > 0 ? selectedImages.value[0].file : selectedFile.value
-    const base64 = await resizeAndCompressImage(primaryImageFile, 1024, 1024, 0.8)
+    // Compress all selected images for advertisement creation
+    const imagesToUse = selectedImages.value.length > 0 ? selectedImages.value.map(img => img.file) : [selectedFile.value]
+    const compressedImages = []
+    
+    for (const imageFile of imagesToUse) {
+      const base64 = await resizeAndCompressImage(imageFile, 1024, 1024, 0.8)
+      compressedImages.push(base64.split(',')[1]) // Remove data:image/jpeg;base64, prefix
+    }
     
     const response = await fetch(`${config.public.apiBaseUrl}/create-advertisement`, {
       method: 'POST',
@@ -587,7 +607,7 @@ const publishNow = async () => {
           categoryId: generatedListing.value.categoryId,
           attributes: generatedListing.value.attributes
         },
-        image: base64.split(',')[1],
+        images: compressedImages, // Send all images
         userDetails: {
           postcode: postcode.value,
           priceModel: priceModel.value // Use the complete price model from selector
