@@ -106,25 +106,88 @@
           />
         </div>
 
-        <!-- Current Images -->
-        <div v-if="form.images && form.images.length > 0">
+        <!-- Image Management -->
+        <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">
-            Current Images
+            Product Images
           </label>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <div
-              v-for="(image, index) in form.images"
-              :key="index"
-              class="relative"
-            >
-              <img
-                :src="image"
-                :alt="`Draft image ${index + 1}`"
-                class="w-full h-24 object-cover rounded-lg border"
+          
+          <!-- Current Images -->
+          <div v-if="form.images && form.images.length > 0" class="mb-4">
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+              <div
+                v-for="(image, index) in form.images"
+                :key="index"
+                class="relative group"
               >
+                <img
+                  :src="image"
+                  :alt="`Draft image ${index + 1}`"
+                  class="w-full h-24 object-cover rounded-lg border"
+                >
+                <div class="absolute top-1 left-1 bg-black bg-opacity-70 text-white text-xs px-1.5 py-0.5 rounded">
+                  {{ index + 1 }}
+                </div>
+                <button
+                  @click="removeExistingImage(index)"
+                  class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold opacity-70 group-hover:opacity-100 transition-opacity"
+                  title="Remove image"
+                >
+                  ×
+                </button>
+              </div>
             </div>
           </div>
-          <p class="text-gray-500 text-sm mt-1">Images cannot be changed after creation</p>
+          
+          <!-- Add New Images -->
+          <div v-if="(!form.images || form.images.length < 3)" class="mb-3">
+            <input
+              ref="imageInput"
+              type="file"
+              accept="image/*"
+              multiple
+              @change="handleNewImages"
+              class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-orange-700"
+            >
+            <p class="text-xs text-gray-500 mt-1">
+              💡 Add {{ 3 - (form.images?.length || 0) }} more image{{ (3 - (form.images?.length || 0)) !== 1 ? 's' : '' }} (max 3 total)
+            </p>
+          </div>
+          
+          <!-- New Images Preview -->
+          <div v-if="newImages.length > 0" class="mb-3">
+            <p class="text-sm font-medium text-gray-700 mb-2">New Images to Add:</p>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div
+                v-for="(imageObj, index) in newImages"
+                :key="index"
+                class="relative group"
+              >
+                <img
+                  :src="imageObj.preview"
+                  :alt="`New image ${index + 1}`"
+                  class="w-full h-24 object-cover rounded-lg border border-blue-300"
+                >
+                <div class="absolute top-1 left-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
+                  NEW
+                </div>
+                <button
+                  @click="removeNewImage(index)"
+                  class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold opacity-70 group-hover:opacity-100 transition-opacity"
+                  title="Remove new image"
+                >
+                  ×
+                </button>
+                <div class="absolute bottom-1 left-1 right-1 bg-black bg-opacity-70 text-white text-xs p-1 rounded text-center">
+                  {{ (imageObj.file.size / 1024 / 1024).toFixed(1) }}MB
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <p class="text-gray-500 text-sm">
+            {{ (form.images?.length || 0) + newImages.length }}/3 images selected
+          </p>
         </div>
 
         <!-- Attributes (if any) -->
@@ -203,6 +266,8 @@ const loadingDetails = ref(false)
 const loadError = ref(null)
 const saving = ref(false)
 const errors = ref({})
+const newImages = ref([])
+const imageInput = ref()
 
 // Initialize form data
 onMounted(() => {
@@ -355,6 +420,108 @@ const onCategoryChanged = async (newCategoryId) => {
   }
 }
 
+const handleNewImages = async (event) => {
+  const files = Array.from(event.target.files)
+  
+  if (files.length === 0) return
+  
+  // Calculate how many more images we can add
+  const currentTotal = (form.value.images?.length || 0) + newImages.value.length
+  const remainingSlots = 3 - currentTotal
+  
+  if (files.length > remainingSlots) {
+    errors.value.general = `Can only add ${remainingSlots} more image${remainingSlots !== 1 ? 's' : ''}. Maximum 3 images total.`
+    return
+  }
+  
+  // Clear any existing errors
+  errors.value.general = null
+  
+  // Process each file
+  for (const file of files) {
+    // Validate file size (max 10MB per image)
+    if (file.size > 10 * 1024 * 1024) {
+      errors.value.general = `Image "${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Please select images under 10MB.`
+      continue
+    }
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      errors.value.general = `"${file.name}" is not a valid image file.`
+      continue
+    }
+    
+    try {
+      const preview = await fileToBase64(file)
+      newImages.value.push({
+        file: file,
+        preview: preview,
+        name: file.name
+      })
+    } catch (error) {
+      errors.value.general = `Failed to read image "${file.name}"`
+    }
+  }
+  
+  // Reset file input
+  if (imageInput.value) {
+    imageInput.value.value = ''
+  }
+}
+
+const removeExistingImage = (index) => {
+  form.value.images.splice(index, 1)
+  errors.value.general = null
+}
+
+const removeNewImage = (index) => {
+  newImages.value.splice(index, 1)
+  errors.value.general = null
+}
+
+const uploadNewImagesToS3 = async (userToken) => {
+  if (newImages.value.length === 0) return []
+  
+  const uploadedUrls = []
+  
+  for (const imageObj of newImages.value) {
+    try {
+      // Compress image  
+      const compressedBase64 = await resizeAndCompressImage(imageObj.file, 1024, 1024, 0.8)
+      
+      // For now, we'll use a simple approach by calling our existing upload logic
+      // We'll send the images to a draft-specific upload endpoint that we'll create
+      const response = await fetch(`${config.public.apiBaseUrl}/drafts/${props.draft.draftId}/upload-image?user_id=${userToken}`, {
+        method: 'POST', 
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          image: compressedBase64.split(',')[1] // Remove data:image/jpeg;base64, prefix
+        })
+      })
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Failed to upload image (${response.status}): ${errorText}`)
+      }
+      
+      const data = await response.json()
+      if (data.error) {
+        throw new Error(data.error)
+      }
+      
+      uploadedUrls.push(data.imageUrl)
+      
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      throw new Error(`Failed to upload image "${imageObj.name}": ${error.message}`)
+    }
+  }
+  
+  return uploadedUrls
+}
+
 const saveDraft = async () => {
   if (!validateForm()) {
     return
@@ -371,11 +538,26 @@ const saveDraft = async () => {
     const draftId = props.draft.draftId
     console.log('Saving draft:', draftId)
     
+    // Upload new images if any
+    let newImageUrls = []
+    if (newImages.value.length > 0) {
+      try {
+        newImageUrls = await uploadNewImagesToS3(userToken)
+      } catch (error) {
+        errors.value.general = error.message
+        return
+      }
+    }
+    
+    // Combine existing and new image URLs
+    const finalImageUrls = [...(form.value.images || []), ...newImageUrls]
+    
     const updateData = {
       title: form.value.title,
       description: form.value.description,
       priceModel: form.value.priceModel, // Send complete price model
-      postcode: form.value.postcode.replace(/\s/g, '') // Remove spaces from postcode
+      postcode: form.value.postcode.replace(/\s/g, ''), // Remove spaces from postcode
+      images: finalImageUrls // Update images array
     }
     
     // Include category change if user selected a different category
@@ -441,6 +623,62 @@ const saveDraft = async () => {
   } finally {
     saving.value = false
   }
+}
+
+// Utility functions
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = error => reject(error)
+  })
+}
+
+const resizeAndCompressImage = (file, maxWidth = 1024, maxHeight = 1024, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = new Image()
+    
+    img.onload = () => {
+      // Calculate new dimensions while maintaining aspect ratio
+      let { width, height } = img
+      
+      if (width > height) {
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width
+          width = maxWidth
+        }
+      } else {
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height
+          height = maxHeight
+        }
+      }
+      
+      // Set canvas dimensions
+      canvas.width = width
+      canvas.height = height
+      
+      // Draw and compress image
+      ctx.drawImage(img, 0, 0, width, height)
+      
+      // Convert to base64 with compression
+      const base64 = canvas.toDataURL('image/jpeg', quality)
+      resolve(base64)
+    }
+    
+    img.onerror = reject
+    
+    // Load the image
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      img.src = e.target.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
 }
 
 // Watch form changes to clear errors
