@@ -33,40 +33,68 @@
         <!-- Image Upload Section -->
         <div class="card mb-8">
           <h2 class="text-xl font-semibold text-gray-900 mb-4">
-            📸 Upload Product Image
+            📸 Upload Product Images
           </h2>
           
           <div class="space-y-4">
             <!-- File Input -->
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">
-                Select an image of your product
+                Select up to 3 images of your product (more images = better results)
               </label>
               <input
                 ref="fileInput"
                 type="file"
                 accept="image/*"
+                multiple
                 @change="handleFileSelect"
                 class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-orange-700"
               >
+              <p class="text-xs text-gray-500 mt-1">
+                💡 Tip: Upload different angles for better AI analysis (max 3 images)
+              </p>
             </div>
 
-            <!-- Image Preview -->
-            <div v-if="selectedImage" class="text-center">
-              <img
-                :src="selectedImage"
-                alt="Selected product"
-                class="max-w-sm mx-auto rounded-lg shadow-md"
-              >
+            <!-- Image Previews -->
+            <div v-if="selectedImages.length > 0" class="space-y-3">
+              <div class="text-sm font-medium text-gray-700">
+                Selected Images ({{ selectedImages.length }}/3):
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div 
+                  v-for="(image, index) in selectedImages" 
+                  :key="index"
+                  class="relative group"
+                >
+                  <img
+                    :src="image.preview"
+                    :alt="`Product image ${index + 1}`"
+                    class="w-full h-48 object-cover rounded-lg shadow-md"
+                  >
+                  <div class="absolute top-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                    {{ index + 1 }}
+                  </div>
+                  <button
+                    @click="removeImage(index)"
+                    class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold opacity-70 group-hover:opacity-100 transition-opacity"
+                    title="Remove image"
+                  >
+                    ×
+                  </button>
+                  <div class="absolute bottom-2 left-2 right-2 bg-black bg-opacity-70 text-white text-xs p-1 rounded text-center">
+                    {{ (image.file.size / 1024 / 1024).toFixed(1) }}MB
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Generate Button -->
             <button
-              v-if="selectedImage && !loading"
+              v-if="selectedImages.length > 0 && !loading"
               @click="generateListing"
               class="btn btn-primary w-full"
             >
-              🚀 Generate Listing
+              🚀 Generate Listing{{ selectedImages.length > 1 ? ` from ${selectedImages.length} Images` : '' }}
             </button>
 
             <!-- Loading State -->
@@ -289,8 +317,9 @@ const config = useRuntimeConfig()
 
 // Reactive data
 const userToken = ref(null)
-const selectedImage = ref(null)
-const selectedFile = ref(null)
+const selectedImage = ref(null) // Keep for backward compatibility
+const selectedFile = ref(null) // Keep for backward compatibility
+const selectedImages = ref([]) // New: array of selected images
 const generatedListing = ref(null)
 const createdAd = ref(null)
 const loading = ref(false)
@@ -327,6 +356,7 @@ const logout = () => {
   localStorage.removeItem('marktplaats_user_id')
   userToken.value = null
   selectedImage.value = null
+  selectedImages.value = []
   generatedListing.value = null
   createdAd.value = null
   error.value = null
@@ -334,25 +364,87 @@ const logout = () => {
 }
 
 const handleFileSelect = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    selectedFile.value = file
+  const files = Array.from(event.target.files)
+  
+  if (files.length === 0) return
+  
+  // Validate file count
+  if (files.length > 3) {
+    error.value = 'Maximum 3 images allowed. Please select up to 3 images.'
+    return
+  }
+  
+  // Clear previous results
+  generatedListing.value = null
+  createdAd.value = null
+  error.value = null
+  categoryOverride.value = null
+  
+  // Process each file
+  const newImages = []
+  let processedCount = 0
+  
+  files.forEach((file, index) => {
+    // Validate file size (max 10MB per image)
+    if (file.size > 10 * 1024 * 1024) {
+      error.value = `Image ${index + 1} is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Please select images under 10MB.`
+      return
+    }
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      error.value = `File ${index + 1} is not a valid image file.`
+      return
+    }
+    
     const reader = new FileReader()
     reader.onload = (e) => {
-      selectedImage.value = e.target.result
+      newImages.push({
+        file: file,
+        preview: e.target.result,
+        name: file.name
+      })
+      
+      processedCount++
+      
+      // When all files are processed, update the reactive array
+      if (processedCount === files.length) {
+        selectedImages.value = newImages
+        
+        // Set backward compatibility values (use first image)
+        if (newImages.length > 0) {
+          selectedFile.value = newImages[0].file
+          selectedImage.value = newImages[0].preview
+        }
+      }
+    }
+    reader.onerror = () => {
+      error.value = `Failed to read image ${index + 1}`
     }
     reader.readAsDataURL(file)
-    
-    // Clear previous results
-    generatedListing.value = null
-    createdAd.value = null
+  })
+}
+
+const removeImage = (index) => {
+  selectedImages.value.splice(index, 1)
+  
+  // Update backward compatibility values
+  if (selectedImages.value.length > 0) {
+    selectedFile.value = selectedImages.value[0].file
+    selectedImage.value = selectedImages.value[0].preview
+  } else {
+    selectedFile.value = null
+    selectedImage.value = null
+  }
+  
+  // Clear error if it was about too many images
+  if (error.value && error.value.includes('Maximum 3 images')) {
     error.value = null
-    categoryOverride.value = null
   }
 }
 
 const generateListing = async () => {
-  if (!selectedFile.value) return
+  if (selectedImages.value.length === 0) return
   
   // Check if user is authenticated
   if (!userToken.value) {
@@ -361,41 +453,56 @@ const generateListing = async () => {
   }
   
   loading.value = true
-  loadingMessage.value = 'Compressing and analyzing image...'
+  loadingMessage.value = `Compressing and analyzing ${selectedImages.value.length} image${selectedImages.value.length > 1 ? 's' : ''}...`
   error.value = null
   
   try {
-    // Resize and compress image for better API performance
-    loadingMessage.value = 'Compressing image for mobile optimization...'
-    const base64 = await resizeAndCompressImage(selectedFile.value, 1024, 1024, 0.8)
+    // Compress all images
+    loadingMessage.value = `Compressing ${selectedImages.value.length} image${selectedImages.value.length > 1 ? 's' : ''} for optimization...`
     
-    loadingMessage.value = 'Analyzing image with AI...'
+    const compressedImages = []
+    let totalOriginalSize = 0
+    let totalCompressedSize = 0
     
-    // Log compression results for debugging
-    const originalSize = selectedFile.value.size
-    const compressedSize = Math.round((base64.length * 3) / 4) // Approximate compressed size
-    console.log(`Image compression: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB`)
-    
-    // Warn if still too large
-    if (compressedSize > 5 * 1024 * 1024) { // 5MB limit
-      console.warn('Compressed image is still quite large:', compressedSize / 1024 / 1024, 'MB')
+    for (let i = 0; i < selectedImages.value.length; i++) {
+      const imageObj = selectedImages.value[i]
+      const base64 = await resizeAndCompressImage(imageObj.file, 1024, 1024, 0.8)
+      compressedImages.push(base64.split(',')[1]) // Remove data:image/jpeg;base64, prefix
+      
+      totalOriginalSize += imageObj.file.size
+      totalCompressedSize += Math.round((base64.length * 3) / 4)
     }
     
-    loadingMessage.value = 'Creating draft listing...'
+    // Log compression results for debugging
+    console.log(`Multi-image compression: ${(totalOriginalSize / 1024 / 1024).toFixed(2)}MB → ${(totalCompressedSize / 1024 / 1024).toFixed(2)}MB (${selectedImages.value.length} images)`)
+    
+    loadingMessage.value = `Analyzing ${selectedImages.value.length} image${selectedImages.value.length > 1 ? 's' : ''} with AI...`
     
     // Call generate listing API with user_id and postcode
     console.log('Calling API:', `${config.public.apiBaseUrl}/generate-listing`)
+    
+    // Prepare API payload - use new multi-image format if multiple images, else single image for compatibility
+    const apiPayload = {
+      user_id: userToken.value,
+      postcode: postcode.value || '1000AA'
+    }
+    
+    if (selectedImages.value.length === 1) {
+      // Single image - use backward compatible format
+      apiPayload.image = compressedImages[0]
+    } else {
+      // Multiple images - use new format
+      apiPayload.images = compressedImages
+    }
+    
+    loadingMessage.value = 'Creating draft listing...'
     
     const response = await fetch(`${config.public.apiBaseUrl}/generate-listing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        image: base64.split(',')[1], // Remove data:image/jpeg;base64, prefix
-        user_id: userToken.value,
-        postcode: postcode.value || '1000AA' // Use entered postcode or default
-      })
+      body: JSON.stringify(apiPayload)
     })
     
     console.log('API response status:', response.status)
@@ -443,6 +550,7 @@ const createAnotherDraft = () => {
   // Reset form to create another draft
   selectedImage.value = null
   selectedFile.value = null
+  selectedImages.value = []
   generatedListing.value = null
   createdAd.value = null
   error.value = null
@@ -462,8 +570,10 @@ const publishNow = async () => {
   error.value = null
   
   try {
-    // Use the same compressed image for advertisement creation
-    const base64 = await resizeAndCompressImage(selectedFile.value, 1024, 1024, 0.8)
+    // Use the same compressed images for advertisement creation
+    // For now, use the first image for backward compatibility with publish endpoint
+    const primaryImageFile = selectedImages.value.length > 0 ? selectedImages.value[0].file : selectedFile.value
+    const base64 = await resizeAndCompressImage(primaryImageFile, 1024, 1024, 0.8)
     
     const response = await fetch(`${config.public.apiBaseUrl}/create-advertisement`, {
       method: 'POST',
@@ -538,6 +648,7 @@ const createAnother = () => {
   // Reset form to create another listing
   selectedImage.value = null
   selectedFile.value = null
+  selectedImages.value = []
   generatedListing.value = null
   createdAd.value = null
   error.value = null
@@ -600,12 +711,12 @@ const resizeAndCompressImage = (file, maxWidth = 1024, maxHeight = 1024, quality
 }
 
 // Legacy utility function (kept for backward compatibility)
-const fileToBase64 = (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.readAsDataURL(file)
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = error => reject(error)
-  })
-}
+// const fileToBase64 = (file) => {
+//   return new Promise((resolve, reject) => {
+//     const reader = new FileReader()
+//     reader.readAsDataURL(file)
+//     reader.onload = () => resolve(reader.result)
+//     reader.onerror = error => reject(error)
+//   })
+// }
 </script>
