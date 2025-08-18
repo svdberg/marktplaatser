@@ -402,6 +402,37 @@ functions:
               - X-Amz-User-Agent
             allowCredentials: false
 
+  draftImageUpload:
+    handler: src/marktplaats_backend/draft_image_upload_lambda.lambda_handler
+    events:
+      # Upload image to draft: POST /draft-images/upload
+      - http:
+          path: draft-images/upload
+          method: post
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+      - http:
+          path: draft-images/upload
+          method: options
+          cors:
+            origin: 'http://marktplaats-frontend-simple-prod-website.s3-website.eu-west-1.amazonaws.com'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+
 resources:
   Resources:
     UserTokensTable:

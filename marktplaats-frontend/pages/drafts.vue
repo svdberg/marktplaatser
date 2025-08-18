@@ -95,13 +95,28 @@
             :key="draft.draftId"
             class="card hover:shadow-lg transition-shadow"
           >
-            <!-- Draft Image -->
+            <!-- Draft Images -->
             <div v-if="draft.images && draft.images.length > 0" class="mb-4">
-              <img
-                :src="draft.images[0]"
-                :alt="draft.title"
-                class="w-full h-48 object-cover rounded-lg"
-              >
+              <div v-if="draft.images.length === 1">
+                <img
+                  :src="draft.images[0]"
+                  :alt="draft.title"
+                  class="w-full h-48 object-cover rounded-lg"
+                >
+              </div>
+              <div v-else class="relative">
+                <img
+                  :src="draft.images[0]"
+                  :alt="draft.title"
+                  class="w-full h-48 object-cover rounded-lg"
+                >
+                <div class="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                  +{{ draft.images.length - 1 }} more
+                </div>
+                <div class="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                  {{ draft.images.length }} images
+                </div>
+              </div>
             </div>
             <div v-else class="bg-gray-100 h-48 rounded-lg flex items-center justify-center mb-4">
               <span class="text-gray-400 text-4xl">📷</span>
@@ -224,13 +239,34 @@
 
           <!-- Preview Content -->
           <div class="space-y-4">
-            <!-- Image -->
+            <!-- Images -->
             <div v-if="selectedDraft.images && selectedDraft.images.length > 0">
-              <img
-                :src="selectedDraft.images[0]"
-                :alt="selectedDraft.title"
-                class="w-full max-h-64 object-cover rounded-lg"
-              >
+              <div v-if="selectedDraft.images.length === 1">
+                <img
+                  :src="selectedDraft.images[0]"
+                  :alt="selectedDraft.title"
+                  class="w-full max-h-64 object-cover rounded-lg"
+                >
+              </div>
+              <div v-else>
+                <p class="text-sm font-medium text-gray-700 mb-2">{{ selectedDraft.images.length }} Images:</p>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <div
+                    v-for="(image, index) in selectedDraft.images"
+                    :key="index"
+                    class="relative"
+                  >
+                    <img
+                      :src="image"
+                      :alt="`${selectedDraft.title} - Image ${index + 1}`"
+                      class="w-full h-20 object-cover rounded-lg"
+                    >
+                    <div class="absolute top-1 left-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
+                      {{ index + 1 }}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Details -->

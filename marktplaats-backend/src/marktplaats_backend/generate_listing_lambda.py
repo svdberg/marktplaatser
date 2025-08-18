@@ -52,15 +52,34 @@ def _parse_and_validate_request(event):
     """Parse and validate the incoming request."""
     try:
         body = json.loads(event["body"])
-        image_data = base64.b64decode(body["image"])
         internal_user_id = body.get("user_id")
         postcode = body.get("postcode", "1000AA")
         
         if not internal_user_id:
             return None, _create_error_response(400, "user_id is required")
+        
+        # Support both single image (backward compatibility) and multiple images
+        images_data = []
+        if "image" in body:
+            # Single image format (backward compatibility)
+            images_data = [base64.b64decode(body["image"])]
+        elif "images" in body:
+            # Multiple images format
+            if not isinstance(body["images"], list):
+                return None, _create_error_response(400, "images must be an array")
+            
+            if len(body["images"]) == 0:
+                return None, _create_error_response(400, "At least one image is required")
+            
+            if len(body["images"]) > 3:
+                return None, _create_error_response(400, "Maximum 3 images allowed")
+            
+            images_data = [base64.b64decode(img) for img in body["images"]]
+        else:
+            return None, _create_error_response(400, "Either 'image' or 'images' field is required")
             
         return {
-            "image_data": image_data,
+            "images_data": images_data,
             "internal_user_id": internal_user_id,
             "postcode": postcode
         }, None
@@ -133,27 +152,39 @@ def _map_attributes(listing_data, category_match, flat_categories):
         return []
 
 
+def _upload_images_to_s3(images_data, marktplaats_user_id):
+    """Upload multiple images to S3 for draft storage."""
+    image_urls = []
+    s3_bucket = os.environ.get('S3_BUCKET', 'marktplaatser-images')
+    
+    for i, image_data in enumerate(images_data):
+        try:
+            image_filename = f"drafts/{marktplaats_user_id}/{uuid.uuid4().hex}_img{i+1}.jpg"
+            
+            s3.put_object(
+                Bucket=s3_bucket,
+                Key=image_filename,
+                Body=image_data,
+                ContentType='image/jpeg',
+                ACL='public-read'
+            )
+            
+            image_url = f"https://{s3_bucket}.s3.amazonaws.com/{image_filename}"
+            image_urls.append(image_url)
+            print(f"Uploaded draft image {i+1} to S3: {image_filename}")
+            
+        except Exception as e:
+            print(f"Error uploading image {i+1} to S3: {str(e)}")
+            # Continue uploading other images even if one fails
+            continue
+    
+    return image_urls
+
+
 def _upload_image_to_s3(image_data, marktplaats_user_id):
-    """Upload image to S3 for draft storage."""
-    try:
-        image_filename = f"drafts/{marktplaats_user_id}/{uuid.uuid4().hex}.jpg"
-        s3_bucket = os.environ.get('S3_BUCKET', 'marktplaatser-images')
-        
-        s3.put_object(
-            Bucket=s3_bucket,
-            Key=image_filename,
-            Body=image_data,
-            ContentType='image/jpeg',
-            ACL='public-read'
-        )
-        
-        image_url = f"https://{s3_bucket}.s3.amazonaws.com/{image_filename}"
-        print(f"Uploaded draft image to S3: {image_filename}")
-        return image_url
-        
-    except Exception as e:
-        print(f"Error uploading image to S3: {str(e)}")
-        return None
+    """Upload single image to S3 for draft storage. (Backward compatibility wrapper)"""
+    image_urls = _upload_images_to_s3([image_data], marktplaats_user_id)
+    return image_urls[0] if image_urls else None
 
 
 def _create_price_model(listing_data, estimated_price):
@@ -244,8 +275,9 @@ def lambda_handler(event, context):
         if error_response:
             return error_response
 
-        # Extract image features using Rekognition
-        labels, text = extract_labels_and_text(request_data["image_data"])
+        # Extract image features using Rekognition (use primary image)
+        primary_image = request_data["images_data"][0]
+        labels, text = extract_labels_and_text(primary_image)
 
         # Fetch Marktplaats categories
         cats = fetch_marktplaats_categories()
@@ -253,7 +285,7 @@ def lambda_handler(event, context):
 
         # Generate listing with Pinecone RAG (Vision + vector search)
         listing_data = generate_listing_with_pinecone_rag(
-            image_data=request_data["image_data"],
+            images_data=request_data["images_data"],
             rekognition_labels=labels,
             rekognition_text=text
         )
@@ -274,8 +306,8 @@ def lambda_handler(event, context):
             listing_data.get("priceConfidence")
         )
 
-        # Upload image to S3
-        image_url = _upload_image_to_s3(request_data["image_data"], marktplaats_user_id)
+        # Upload images to S3
+        image_urls = _upload_images_to_s3(request_data["images_data"], marktplaats_user_id)
 
         # Create price model
         price_model, suggested_pricing_model = _create_price_model(listing_data, estimated_price)
@@ -299,7 +331,7 @@ def lambda_handler(event, context):
         draft = create_draft_from_ai_generation(
             user_id=marktplaats_user_id,
             ai_result=ai_result,
-            image_urls=[image_url] if image_url else [],
+            image_urls=image_urls,
             postcode=request_data["postcode"]
         )
         
