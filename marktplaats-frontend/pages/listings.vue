@@ -534,7 +534,7 @@ const loadImagesForListings = async () => {
       if (imageData._embedded && imageData._embedded["mp:advertisement-image"]) {
         // Transform the API response to a simpler format for the frontend
         listing.images = imageData._embedded["mp:advertisement-image"].map(img => ({
-          url: img.medium?.href || img.small?.href || img.large?.href, // Prefer medium, fallback to small or large
+          url: img.large?.href || img.medium?.href || img.small?.href, // Prefer large, fallback to medium or small
           mediaId: img.mediaId,
           status: img.status,
           small: img.small?.href,
